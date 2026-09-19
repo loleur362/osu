@@ -1,7 +1,7 @@
-// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
-
 using System;
+using System.Collections.Generic;
 using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Mania.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Mania.Difficulty.Utils;
@@ -21,7 +21,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// Evaluates the difficulty of letting go of the current long note, based on:
         /// <list type="bullet">
         /// <item><description>how long it is held for,</description></item>
-        /// <item><description>and how close its release lands to a release in another column.</description></item>
+        /// <item><description>how close its release lands to a release in another column,</description></item>
+        /// <item><description>and how many other long notes are held during its release.</description></item>
         /// </list>
         /// </summary>
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
@@ -39,6 +40,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             releaseDifficulty += calculateLongHoldBonus(duration, longNoteGate);
             releaseDifficulty += calculateReleaseSpeedBonus(current, longNoteGate);
+            releaseDifficulty += calculateReleaseWhileHolds(current, longNoteGate);
 
             return releaseDifficulty * total_weight;
         }
@@ -62,6 +64,28 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         }
 
         /// <summary>
+        /// Enumerates the end time of the most recent hold in every column other than <paramref name="current"/>'s.
+        /// </summary>
+        private static IEnumerable<double> OtherColumnHoldEndTimes(ManiaDifficultyHitObject current)
+        {
+            for (int otherColumn = 0; otherColumn < current.Row.TotalColumns; otherColumn++)
+            {
+                if (otherColumn == current.Column)
+                    continue;
+
+                double otherStartTime = current.LastStartTimeInColumn(otherColumn);
+
+                if (double.IsNegativeInfinity(otherStartTime))
+                    continue;
+
+                if (Math.Abs(otherStartTime - current.StartTime) <= ChordUtils.CHORD_TOLERANCE_MS)
+                    continue;
+
+                yield return current.LastEndTimeInColumn(otherColumn);
+            }
+        }
+
+        /// <summary>
         /// Releases very close together are harder to time apart, so the closest release in any other column that
         /// is still being held is paid for here.
         /// </summary>
@@ -73,22 +97,65 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double closestReleaseDelta = double.PositiveInfinity;
 
-            for (int otherColumn = 0; otherColumn < current.Row.TotalColumns; otherColumn++)
+            foreach (double otherEndTime in OtherColumnHoldEndTimes(current))
             {
-                if (otherColumn == current.Column)
-                    continue;
-
-                // A hold starting in the same chord is one press, not a second thing to track.
-                if (Math.Abs(current.LastStartTimeInColumn(otherColumn) - current.StartTime) <= ChordUtils.CHORD_TOLERANCE_MS)
-                    continue;
-
-                double otherEndTime = current.LastEndTimeInColumn(otherColumn);
-
                 if (otherEndTime > current.StartTime)
                     closestReleaseDelta = Math.Min(closestReleaseDelta, Math.Abs(current.EndTime - otherEndTime));
             }
 
+            if (double.IsPositiveInfinity(closestReleaseDelta))
+                return 0.0;
+
             return weight * DiffUtils.Logistic(slope * (closestReleaseDelta - offset_ms), longNoteGate);
+        }
+
+        /// <summary>
+        /// Other held notes makes the movement of a release harder, scaling with how many columns are held, and
+        /// nerfed if the next note in this column follows too closely.
+        /// </summary>
+        private static double calculateReleaseWhileHolds(ManiaDifficultyHitObject current, double longNoteGate)
+        {
+            const double release_long_note_weight = 0.4;
+
+            int releasingColumns = 0;
+
+            foreach (double otherEndTime in OtherColumnHoldEndTimes(current))
+            {
+                if (otherEndTime > current.EndTime)
+                    releasingColumns++;
+            }
+
+            if (releasingColumns == 0)
+                return 0.0;
+
+            double columnFactor = 1.0 / (-25.0 / 66.0 * releasingColumns - 5.0 / 11.0) + 2.2;
+
+            return release_long_note_weight * columnFactor * longNoteGate * nextNoteNerf(current);
+        }
+
+        /// <summary>
+        /// If the next note starts too close to this release, the release difficulty should be reduced, with a
+        /// rebound once the next note is far enough away that the motion is no longer being overlapped.
+        /// </summary>
+        private static double nextNoteNerf(ManiaDifficultyHitObject current)
+        {
+            const double min_ms = 80.0;
+            const double max_ms = 220.0;
+
+            ManiaDifficultyHitObject? nextInColumn = current.NextInColumn(0);
+
+            if (nextInColumn == null)
+                return 1.0;
+
+            double gap = nextInColumn.StartTime - current.EndTime;
+
+            if (gap <= min_ms)
+                return 0.0;
+
+            if (gap >= max_ms)
+                return 1.0;
+
+            return DiffUtils.Smoothstep(gap, min_ms, max_ms);
         }
     }
 }
