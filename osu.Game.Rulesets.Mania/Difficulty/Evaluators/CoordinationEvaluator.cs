@@ -1,7 +1,8 @@
-// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Mania.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Mania.Difficulty.Utils;
 
@@ -15,9 +16,10 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// <list type="bullet">
         /// <item><description>how recently each neighbouring column was pressed,</description></item>
         /// <item><description>how wide the chord it sits in is,</description></item>
-        /// <item><description>and how many long notes are being held while it is hit.</description></item>
+        /// <item><description>and how many long notes are being held when it is hit.</description></item>
         /// </list>
         /// </summary>
+
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
         {
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
@@ -71,7 +73,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             if (column < totalColumns - 1)
                 total += columnBoundaryPressure(current, column, left: false, totalColumns);
 
-            return total * TrillUtils.TrillFactor(current) * boundary_pressure_weight;
+            return total * TrillUtils.TrillFactor(current) * boundary_pressure_weight * densityDampenFor(current, totalColumns);
         }
 
         /// <summary>
@@ -81,7 +83,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         private static double columnBoundaryPressure(ManiaDifficultyHitObject current, int column, bool left, int totalColumns)
         {
             const double scale_ms = 1300.0;
-            const double min_delta_ms = 35.0;
+            const double min_delta_ms = 30.0;
 
             // Past this the neighbouring column has had time to be forgotten about, and stops sharing the hand.
             const double activity_window_ms = 450.0;
@@ -108,6 +110,51 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             return intensity * coefficient * (otherActive ? 1.0 : (1.0 - coefficient));
         }
 
+
+        /// <summary>
+        /// Dampens the difficulty of a hit object based on the density of nearby notes.
+        /// </summary>
+        // This targets rolls and other manipable high density patterns in higher key modes such as 7k where the boundary pressure would accumulate 
+        // because I couldnt manage to catch them in manipdetection for some reason
+        private static double densityDampenFor(ManiaDifficultyHitObject current, int totalColumns)
+        {
+            const double density_window_ms = 150.0;
+            const double density_dampen_start = 3.0; // only starts with 3 notes rolls or more
+            const double density_dampen_end = 5.0;
+            const double density_dampen_max = 0.5;
+
+            int liveNeighbours = 0;
+
+            // Ignore chords, they are not overweighted
+            if (current.Row.Size >= 3) return 1.0;
+
+            for (int otherColumn = 0; otherColumn < totalColumns; otherColumn++)
+            {
+                if (otherColumn == current.Column)
+                    continue;
+
+                double otherStart = current.LastStartTimeInColumn(otherColumn);
+
+                if (double.IsNegativeInfinity(otherStart))
+                    continue;
+
+                double otherDelta = current.StartTime - otherStart;
+
+                if (otherDelta < ChordUtils.CHORD_TOLERANCE_MS)
+                    continue;
+
+                if (otherDelta <= density_window_ms)
+                    liveNeighbours++;
+            }
+
+            if (liveNeighbours < density_dampen_start)
+                return 1.0;
+
+            double x = Math.Min(1.0, (liveNeighbours - density_dampen_start) / (density_dampen_end - density_dampen_start));
+            // smooth dampening https://www.desmos.com/calculator/0jvvip7qeq
+            return 1.0 - density_dampen_max * x * x * (3.0 - 2.0 * x);
+        }
+
         /// <summary>
         /// What the extra columns of a chord cost to place. Notes past the first come for free with the press
         /// itself, so this only pays for the shape being wider than one finger.
@@ -132,13 +179,25 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateHoldDifficulty(ManiaDifficultyHitObject current)
         {
-            const double held_long_note_weight = 0.01003;
+            const double held_long_note_weight = 0.25;
             const double held_speed_factor_offset = 0.08;
+            const double hold_start_cap_end_ms = 35.0;
+
+            // High difficulty cap
+            const double soft_ceiling_midpoint = 2.719;
 
             int heldColumns = current.ConcurrentlyHeldColumns(ChordUtils.CHORD_TOLERANCE_MS);
-            double heldSpeedFactor = current.DeltaTime >= ChordUtils.CHORD_TOLERANCE_MS ? 1.0 / (current.DeltaTime / 1000.0 + held_speed_factor_offset) : 1.0;
+            if (heldColumns == 0)
+                return 0.0;
 
-            return held_long_note_weight * Math.Sqrt(heldColumns) * heldSpeedFactor;
+            double heldSpeedFactor = current.DeltaTime >= ChordUtils.CHORD_TOLERANCE_MS ? 1.0 / (current.DeltaTime / 1000.0 + held_speed_factor_offset) : 1.0;
+            double columnFactor = 1.0 / (-25.0 / 66.0 * heldColumns - 5.0 / 11.0) + 2.2;
+            double holdDifficulty = columnFactor * heldSpeedFactor; // https://www.desmos.com/calculator/aoqjrgqqht
+            double difficultyCap = soft_ceiling_midpoint / (soft_ceiling_midpoint + holdDifficulty);
+            // Grace notes are basically chords, they don't have a hold difficulty.
+            double holdStartCap = DiffUtils.Smoothstep(current.DeltaTime, ChordUtils.CHORD_TOLERANCE_MS, hold_start_cap_end_ms);
+
+            return holdStartCap * held_long_note_weight * holdDifficulty * difficultyCap;
         }
     }
 }
