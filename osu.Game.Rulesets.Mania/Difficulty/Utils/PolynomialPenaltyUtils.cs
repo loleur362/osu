@@ -78,7 +78,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         {
             // Our first coefficients are the ones derived from the skill proportion miss counts,
             // and subtracting missCount for the last one sets our root to the corresponding penalty.
-            List<double> listCoefficients = [..coefficients.ToArray(), -totalScoreLoss];
+            List<double> listCoefficients = [.. coefficients.ToArray(), -totalScoreLoss];
 
             List<double?> xVals = DiffUtils.SolvePolynomialRoots(listCoefficients);
 
