@@ -66,7 +66,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// <summary>
         /// Enumerates the end time of the most recent hold in every column other than <paramref name="current"/>'s.
         /// </summary>
-        private static IEnumerable<double> OtherColumnHoldEndTimes(ManiaDifficultyHitObject current)
+        private static IEnumerable<double> otherColumnHoldEndTimes(ManiaDifficultyHitObject current)
         {
             for (int otherColumn = 0; otherColumn < current.Row.TotalColumns; otherColumn++)
             {
@@ -97,7 +97,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double closestReleaseDelta = double.PositiveInfinity;
 
-            foreach (double otherEndTime in OtherColumnHoldEndTimes(current))
+            foreach (double otherEndTime in otherColumnHoldEndTimes(current))
             {
                 if (otherEndTime > current.StartTime)
                     closestReleaseDelta = Math.Min(closestReleaseDelta, Math.Abs(current.EndTime - otherEndTime));
@@ -119,7 +119,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             int releasingColumns = 0;
 
-            foreach (double otherEndTime in OtherColumnHoldEndTimes(current))
+            foreach (double otherEndTime in otherColumnHoldEndTimes(current))
             {
                 if (otherEndTime > current.EndTime)
                     releasingColumns++;
