@@ -11,6 +11,44 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class TechnicalEvaluator
     {
+
+        /// <summary>
+        /// Evaluates how hard the current note is to read and place as a pattern, based on:
+        /// <list type="bullet">
+        /// <item><description>how much its spacing differs from the spacing before it,</description></item>
+        /// <item><description>the shape the hand has to make to reach its column,</description></item>
+        /// <item><description>how much vocabulary the passage around it is written in,</description></item>
+        /// <item><description>and how wide the presses around it are.</description></item>
+        /// </list>
+        /// </summary>
+        public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
+        {
+            const double pattern_buff = 0.69740;
+            const double technical_scale = 1.49964;
+
+            // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
+            const double total_weight = 1.73896; // sqrt(2.49916) * 1.10
+
+            double columnComplexity = evaluateColumnComplexityOf(hitObject);
+            double speedFactor = 1.0 / (hitObject.DeltaTime / 1000.0 + 0.060);
+            double readingPressure = readingPressureOf(hitObject);
+
+            // Mixed rhythm is worth most when it is neither perfectly even nor unreadably loose.
+            // See https://www.desmos.com/calculator/2nrishjcm6
+            double rhythmAmplifier = 1.0 + 0.9 * readingPressure * DiffUtils.BellCurve(windowedIrregularity, 0.15, 0.085);
+
+            // A shape is a spacing together with the direction the hand moved, so a passage can count up plenty of
+            // distinct shapes purely by visiting its columns in a different order while its spacing never changes
+            // which is what an ordinary stream does. The floor exists for a passage whose spacings genuinely differ,
+            // so it is paid in proportion to how much they actually do.
+            double varietyFloor = 1.55 * patternVariety * readingPressure * DiffUtils.Smoothstep(windowedIrregularity, 0.04, 0.12);
+
+            double complexity = Math.Max(rhythmIrregularity + columnComplexity, varietyFloor);
+
+            return pattern_buff * complexity * speedFactor * technical_scale * rhythmAmplifier * chordWidth(hitObject)
+                   * hitObject.ManipulationFactor * total_weight;
+        }
+
         /// <summary>
         /// How far apart in time two notes have to be before the passage stops reading as one steady spacing.
         /// Rounding the log of the gap to this base is what buckets gaps into "the same rhythm".
@@ -51,43 +89,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// How much vocabulary the passage is written in, from the number of distinct shapes it has recently used.
         /// </summary>
         public static double EvaluatePatternVarietyOf(int distinctShapeCount) => DiffUtils.Smoothstep(distinctShapeCount, 2.5, 5.5);
-
-        /// <summary>
-        /// Evaluates how hard the current note is to read and place as a pattern, based on:
-        /// <list type="bullet">
-        /// <item><description>how much its spacing differs from the spacing before it,</description></item>
-        /// <item><description>the shape the hand has to make to reach its column,</description></item>
-        /// <item><description>how much vocabulary the passage around it is written in,</description></item>
-        /// <item><description>and how wide the presses around it are.</description></item>
-        /// </list>
-        /// </summary>
-        public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
-        {
-            const double pattern_buff = 0.69740;
-            const double technical_scale = 1.49964;
-
-            // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
-            const double total_weight = 1.89704; // sqrt(2.49916) * 1.20
-
-            double columnComplexity = evaluateColumnComplexityOf(hitObject);
-            double speedFactor = 1.0 / (hitObject.DeltaTime / 1000.0 + 0.050);
-            double readingPressure = readingPressureOf(hitObject);
-
-            // Mixed rhythm is worth most when it is neither perfectly even nor unreadably loose.
-            // See https://www.desmos.com/calculator/2nrishjcm6
-            double rhythmAmplifier = 1.0 + 0.9 * readingPressure * DiffUtils.BellCurve(windowedIrregularity, 0.15, 0.085);
-
-            // A shape is a spacing together with the direction the hand moved, so a passage can count up plenty of
-            // distinct shapes purely by visiting its columns in a different order while its spacing never changes
-            // which is what an ordinary stream does. The floor exists for a passage whose spacings genuinely differ,
-            // so it is paid in proportion to how much they actually do.
-            double varietyFloor = 1.55 * patternVariety * readingPressure * DiffUtils.Smoothstep(windowedIrregularity, 0.04, 0.12);
-
-            double complexity = Math.Max(rhythmIrregularity + columnComplexity, varietyFloor);
-
-            return pattern_buff * complexity * speedFactor * technical_scale * rhythmAmplifier * chordWidth(hitObject)
-                   * hitObject.ManipulationFactor * total_weight;
-        }
 
         /// <summary>
         /// How little time this note leaves to read what the chart is doing, from a comfortable gap up to a stream gap.
@@ -175,7 +176,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             if (previousDirection != 0 && currentDirection != 0 && Math.Sign(previousDirection) != Math.Sign(currentDirection))
             {
                 double coefficient = CrossColumnUtils.SumBoundaryMultipliersBetween(previous.Column, hitObject.Column, hitObject.Row.TotalColumns);
-                columnComplexity += 0.6 + 2.0 * coefficient;
+                columnComplexity += 0.45 + 2.0 * coefficient;
             }
 
             if (Math.Abs(currentDirection) >= 2)
@@ -184,7 +185,32 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Past a certain span the two columns belong to different hands, and the jump between them stops being one hand's problem.
             double spanDamper = 1.0 - 0.60 * DiffUtils.Smoothstep(Math.Abs(currentDirection), 3.0, 5.5);
 
-            return columnComplexity * spanDamper;
+            return columnComplexity * spanDamper * evennessDamper(hitObject);
+        }
+
+        /// <summary>
+        /// How even the columns are in the latest 400ms.
+        /// A complex and technical pattern can matter less when workload is spread across all fingers.
+        /// </summary>
+        private static double evennessDamper(ManiaDifficultyHitObject hitObject)
+        {
+            const double window_ms = 400.0;
+            const int min_steps = 3;
+
+            int steps = 0, shared = 0;
+
+            for (var prev = hitObject.Row.Previous(); prev != null && hitObject.StartTime - prev.StartTime <= window_ms; prev = prev.Previous())
+            {
+                steps++;
+                if (ColumnPatternUtils.SharesColumn(hitObject.Row.Columns, prev.Columns))
+                    shared++;
+            }
+
+            if (steps < min_steps)
+                return 1.0;
+
+            double evenness = 1.0 - (double)shared / steps;
+            return 1.0 - 0.5 * DiffUtils.Smoothstep(evenness, 0.55, 0.85);
         }
     }
 }
