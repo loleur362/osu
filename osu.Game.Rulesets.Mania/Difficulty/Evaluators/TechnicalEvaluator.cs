@@ -210,7 +210,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 return 1.0;
 
             double evenness = 1.0 - (double)shared / steps;
-            return 1.0 - 0.5 * DiffUtils.Smoothstep(evenness, 0.55, 0.85);
+            return 1.0 - 0.5 * DiffUtils.Smoothstep(evenness, 0.55, 0.8);
         }
     }
 }

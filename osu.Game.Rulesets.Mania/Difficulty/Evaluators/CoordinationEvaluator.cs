@@ -83,7 +83,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         private static double columnBoundaryPressure(ManiaDifficultyHitObject current, int column, bool left, int totalColumns)
         {
             const double scale_ms = 1300.0;
-            const double min_delta_ms = 30.0;
+            const double min_delta_ms = 35.0;
 
             // Past this the neighbouring column has had time to be forgotten about, and stops sharing the hand.
             const double activity_window_ms = 450.0;
@@ -114,19 +114,21 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// <summary>
         /// Dampens the difficulty of a hit object based on the density of nearby notes.
         /// </summary>
-        // This targets rolls and other manipable high density patterns in higher key modes such as 7k where the boundary pressure would accumulate 
-        // because I couldnt manage to catch them in manipdetection for some reason
+        // # Note: This targets rolls and other manipable high density patterns in higher key modes such as 7k where the boundary pressure would accumulate 
+        // # because I couldnt manage to catch them in manipdetection for some reason.
+        // # In short, BoundaryPressure would accumulate a lot and inflate difficulty while manip detection wont nerf it
+        // # because in 7k+ its usually accompagnied with other pattern and the easy roll slips through
         private static double densityDampenFor(ManiaDifficultyHitObject current, int totalColumns)
         {
-            const double density_window_ms = 150.0;
-            const double density_dampen_start = 3.0; // only starts with 3 notes rolls or more
-            const double density_dampen_end = 5.0;
-            const double density_dampen_max = 0.5;
+            const double density_window_ms = 180.0;
+            const double note_cap = 3.0; // only starts with 3 notes rolls or more
+            const double density_dampen_end = 8.0;
+            const double density_dampen_max = 0.75;
 
             int liveNeighbours = 0;
 
-            // Ignore chords, they are not overweighted
-            if (current.Row.Size >= 3) return 1.0;
+            // Ignore chords unless its isolated
+            if (current.Row.Size >= Math.Min(3, Math.Floor(totalColumns / 3.0) + 1) && ChordUtils.LocalChordSize(current) < 2.0) return 1.0;
 
             for (int otherColumn = 0; otherColumn < totalColumns; otherColumn++)
             {
@@ -147,10 +149,10 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                     liveNeighbours++;
             }
 
-            if (liveNeighbours < density_dampen_start)
+            if (liveNeighbours < note_cap)
                 return 1.0;
 
-            double x = Math.Min(1.0, (liveNeighbours - density_dampen_start) / (density_dampen_end - density_dampen_start));
+            double x = Math.Min(1.0, (liveNeighbours - note_cap) / (density_dampen_end - note_cap));
             // smooth dampening https://www.desmos.com/calculator/0jvvip7qeq
             return 1.0 - density_dampen_max * x * x * (3.0 - 2.0 * x);
         }
