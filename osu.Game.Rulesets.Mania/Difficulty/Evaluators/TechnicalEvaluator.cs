@@ -27,7 +27,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double technical_scale = 1.49964;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
-            const double total_weight = 1.73896; // sqrt(2.49916) * 1.10
+            const double total_weight = 2.05513; // sqrt(2.49916) * 1.30
 
             double columnComplexity = evaluateColumnComplexityOf(hitObject);
             double speedFactor = 1.0 / (hitObject.DeltaTime / 1000.0 + 0.060);
