@@ -23,7 +23,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             if (hitObject.DeltaTime < ChordUtils.CHORD_TOLERANCE_MS)
                 return 0.0;
 
-            const double tap_rate_offset_ms = 30;
+            const double tap_rate_offset_ms = 36;
             const double speed_weight = 1.983;
 
             // A repeat in the same column is one finger doing the work of two, so it taps slower than its gap suggests.
@@ -59,7 +59,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double density = DiffUtils.Smoothstep(rows, 5.0, 8.0);
             double even = 1.0 - (double)shared / rows;
-            return 1.0 - 0.425 * density * DiffUtils.Smoothstep(even, 0.55, 0.85);
+            return 1.0 - 0.6 * density * DiffUtils.Smoothstep(even, 0.55, 0.85);
         }
     }
 }
