@@ -103,6 +103,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Boundaries sit between columns, so the left side boundary shares this column's index.
             int boundaryIndex = left ? column : column + 1;
 
+            // capping intensity, graces are not nerfed enough
             double intensity = scale_ms / (adjacentDelta + min_delta_ms);
             double coefficient = CrossColumnUtils.ColumnBoundaryMultiplier(boundaryIndex, totalColumns);
             bool otherActive = adjacentDelta <= activity_window_ms;
@@ -127,8 +128,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             int liveNeighbours = 0;
 
-            // Ignore chords unless its isolated
-            if (current.Row.Size >= Math.Min(3, Math.Floor(totalColumns / 3.0) + 1) && ChordUtils.LocalChordSize(current) < 2.0) return 1.0;
+            // Ignore chords
+            if (current.Row.Size >= Math.Min(3, Math.Floor(totalColumns / 3.0) + 1)) return 1.0;
 
             for (int otherColumn = 0; otherColumn < totalColumns; otherColumn++)
             {
@@ -171,7 +172,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Chordjacks are already paid for by Jack, so the dampening here only targets sustained chord spam.
             bool isChordjack = columnDelta <= JackEvaluator.JACK_WINDOW_MS;
 
-            return load_per_extra_column * (depthInChord - 1) * ChordUtils.ChordRepeatDampen(current, columnDelta)
+            return load_per_extra_column * (depthInChord - 1) * ChordUtils.ChordRepeatNerf(current, columnDelta)
                    * (isChordjack ? ChordUtils.CHORDJACK_NERF : 1.0) * ChordUtils.ChordSpeedFactor(columnDelta);
         }
 

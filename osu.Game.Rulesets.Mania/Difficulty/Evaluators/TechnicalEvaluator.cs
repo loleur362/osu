@@ -87,8 +87,15 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
         /// <summary>
         /// How much vocabulary the passage is written in, from the number of distinct shapes it has recently used.
+        /// More columns write more shapes at the same density, so the window scales with
+        /// keymode: 4K reads exactly the old thresholds, higher keys need a bigger
+        /// vocabulary to max out. Capped so the top stays reachable in an 8-shape window.
         /// </summary>
-        public static double EvaluatePatternVarietyOf(int distinctShapeCount) => DiffUtils.Smoothstep(distinctShapeCount, 2.5, 5.5);
+        public static double EvaluatePatternVarietyOf(int distinctShapeCount, int totalColumns)
+        {
+            double keyScale = Math.Min(1.45, 1.0 + 0.125 * Math.Max(0, totalColumns - 4));
+            return DiffUtils.Smoothstep(distinctShapeCount, 2.5 * keyScale, 5.5 * keyScale);
+        }
 
         /// <summary>
         /// How little time this note leaves to read what the chart is doing, from a comfortable gap up to a stream gap.
@@ -202,15 +209,27 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             for (var prev = hitObject.Row.Previous(); prev != null && hitObject.StartTime - prev.StartTime <= window_ms; prev = prev.Previous())
             {
                 steps++;
+
                 if (ColumnPatternUtils.SharesColumn(hitObject.Row.Columns, prev.Columns))
                     shared++;
             }
 
-            if (steps < min_steps)
-                return 1.0;
+            double damper = 1.0;
 
-            double evenness = 1.0 - (double)shared / steps;
-            return 1.0 - 0.5 * DiffUtils.Smoothstep(evenness, 0.55, 0.8);
+            if (steps >= min_steps)
+            {
+                double evenness = 1.0 - (double)shared / steps;
+
+                // Random play already looks even on high keymodes (fewer repeats by chance),
+                // so measure evenness above the random baseline instead. 4K and below
+                // read exactly as before.
+                if (hitObject.Row.TotalColumns > 4)
+                    evenness = DiffUtils.ReverseLerp(evenness, 1.0 / hitObject.Row.TotalColumns, 1.0);
+
+                damper = 1.0 - 0.5 * DiffUtils.Smoothstep(evenness, 0.55, 0.8);
+            }
+
+            return damper;
         }
     }
 }

@@ -24,7 +24,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 return 0.0;
 
             const double tap_rate_offset_ms = 36;
-            const double speed_weight = 1.983;
+            const double speed_weight = 1.583;
 
             // A repeat in the same column is one finger doing the work of two, so it taps slower than its gap suggests.
             const double jack_speed_nerf = 0.49996;
@@ -43,23 +43,50 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         }
 
         /// <summary>
-        /// Soften growth because a short speed spike does not demand as much as a sustained difficulty.
+        /// Soften growth because a short speed spike does not demand as much as a sustained difficulty:
+        /// a row much faster than its previous history gets supressed, while sustained speed at any density passes entirely.
+        /// Sustained density additionally earns a reward, multiplied by manipulation so flagged mash stays out.
         /// </summary>
         private static double speedGrowth(ManiaDifficultyHitObject hitObject)
         {
-            int rows = 0, shared = 0;
-            for (var p = hitObject.Row.Previous(); p != null && hitObject.StartTime - p.StartTime <= 400.0; p = p.Previous())
+            const double window_ms = 200.0;
+            const double sustain_window_ms = 1000.0;
+
+            int rows = 0, longRows = 0, longShared = 0;
+
+            for (var p = hitObject.Row.Previous(); p != null && hitObject.StartTime - p.StartTime <= sustain_window_ms; p = p.Previous())
             {
-                rows++;
-                if (ColumnPatternUtils.SharesColumn(hitObject.Row.Columns, p.Columns)) shared++;
+                longRows++;
+
+                if (ColumnPatternUtils.SharesColumn(hitObject.Row.Columns, p.Columns))
+                    longShared++;
+
+                if (hitObject.StartTime - p.StartTime <= window_ms)
+                    rows++;
             }
 
-            if (rows < 4)
-                return 1.0;
+            double spikeNerf = 1.0;
 
-            double density = DiffUtils.Smoothstep(rows, 5.0, 8.0);
-            double even = 1.0 - (double)shared / rows;
-            return 1.0 - 0.6 * density * DiffUtils.Smoothstep(even, 0.55, 0.85);
+            if (rows >= 4)
+            {
+                double rowGap = hitObject.Row.GapBefore;
+
+                if (!double.IsPositiveInfinity(rowGap) && rowGap > 0.0)
+                {
+                    double ratio = (1000.0 / rowGap) / (rows / (window_ms / 1000.0));
+                    spikeNerf = 1.0 - 0.5 * DiffUtils.Smoothstep(ratio, 2.0, 4.0);
+                }
+            }
+
+            double sustainReward = 0.0;
+
+            if (longRows >= 20)
+            {
+                double longEven = 1.0 - (double)longShared / longRows;
+                sustainReward = 0.4 * DiffUtils.Smoothstep(longRows, 20.0, 30.0) * DiffUtils.Smoothstep(longEven, 0.6, 0.8) * hitObject.ManipulationFactor;
+            }
+
+            return spikeNerf * (1.0 + sustainReward);
         }
     }
 }
