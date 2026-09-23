@@ -57,10 +57,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         }
 
         /// <summary>
-        /// How much of a chord press is left after the same wide press keeps coming back. The hand settles into a
-        /// shape it never has to leave, so a section of them stops being worth what the first one was.
+        /// How similar the chord is to the previous, a repetition will reward less
         /// </summary>
-        public static double ChordRepeatDampen(ManiaDifficultyHitObject current, double columnDelta)
+        public static double ChordRepeatNerf(ManiaDifficultyHitObject current, double columnDelta)
         {
             const double full_chord_nerf = 0.50;
             const double full_chord_run_ramp = 2.0;
@@ -71,18 +70,22 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
             int totalColumns = current.Row.TotalColumns;
             double speedScale = DiffUtils.ReverseLerp(columnDelta, 0.0, chord_speed_threshold_ms);
 
-            double dampen = chordRunDampen(current, totalColumns, full_chord_nerf * speedScale, full_chord_run_ramp);
+            // Density is more common but not easier in higher keycounts, scale accordingly.
+            double fullNerf = totalColumns >= 7 ? 0.68 : full_chord_nerf;
+            double nearFullNerf = totalColumns >= 7 ? 0.15 : near_full_chord_nerf;
+
+            double nerf = chordRunNerf(current, totalColumns, fullNerf * speedScale, full_chord_run_ramp);
 
             if (totalColumns >= 2)
-                dampen *= chordRunDampen(current, totalColumns - 1, near_full_chord_nerf * speedScale, near_full_chord_run_ramp);
+                nerf *= chordRunNerf(current, totalColumns - 1, nearFullNerf * speedScale, near_full_chord_run_ramp);
 
-            return dampen;
+            return nerf;
         }
 
         /// <summary>
         /// How much is left after a run of rows at least <paramref name="minSize"/> wide.
         /// </summary>
-        private static double chordRunDampen(ManiaDifficultyHitObject current, int minSize, double ceiling, double runRamp)
+        private static double chordRunNerf(ManiaDifficultyHitObject current, int minSize, double ceiling, double runRamp)
         {
             if (ceiling <= 0)
                 return 1.0;

@@ -51,7 +51,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators.Jack
             // A band rather than a threshold: the texture has to be thick enough to drop off and thin enough not
             // to be chordstream. See https://www.desmos.com/calculator/edme0ehdom
             double localSize = ChordUtils.LocalChordSize(current, 4);
-            double sizeDampen = DiffUtils.Smoothstep(localSize, 1.90, 2.25) * DiffUtils.Smoothstep(localSize, 2.9, 2.5);
+            double sizeDampen = DiffUtils.Smoothstep(localSize, 1.90, 2.25) * DiffUtils.Smoothstep(localSize, 3.6, 2.5);
 
             // The repeats that are already hard do not need the whole buff on top, once the texture is dense enough that the
             // strain is coming from the section rather than this one drop.

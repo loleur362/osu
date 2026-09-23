@@ -69,7 +69,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             return Math.Max(0.1,
                 (1.0 + 0.17460 * ChordUtils.ChordSpeedFactor(columnDelta) * (chordDepth - 1))
-                * ChordUtils.ChordRepeatDampen(current, columnDelta));
+                * ChordUtils.ChordRepeatNerf(current, columnDelta));
         }
 
         /// <summary>
@@ -93,7 +93,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double veryfast_ms = 84.0;
 
             const double slow_mult = 0.6;
-            const double fast_mult = 1.2;
+            const double fast_mult = 1.4;
             const double veryfast_mult = 0.75;
             const double veryfast_open_mult = 1.45;
 
@@ -118,20 +118,30 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             // Morphing shapes around the repeat force the hand to re-place while jacking.
             // Repeated chords don't benefit from the bonus.
-            double shapePay = 0.0;
+            // Trills are obtaining almost the maximum bonus but they are nerfed by trill factor.
+            double shapeBonus = 0.0;
 
             if (current.Row.Previous() is { } previous)
             {
                 double distance = ColumnPatternUtils.ChordDifference(previous.Columns, current.Row.Columns);
-                shapePay = DiffUtils.Smoothstep(distance, 0.15, 0.5);
+                shapeBonus = DiffUtils.Smoothstep(distance, 0.15, 0.5);
+
+                if (previous.Previous() is { } prev2
+                    && ColumnPatternUtils.IsRecurrence(prev2.Columns, previous.Columns, current.Row.Columns))
+                    shapeBonus *= 0.35;
+
+                // Static repeats gain a slight nerf
+                if (ColumnPatternUtils.SameColumns(previous.Columns, current.Row.Columns))
+                    chordSpeedMultiplier *= 0.85;
             }
 
-            double lightGate = 1.0 - DiffUtils.Smoothstep(current.Row.Size, 3.0, 5.0);
+            double keymode = Math.Min(current.Row.TotalColumns, 9);
+            double lightGate = 1.0 - DiffUtils.Smoothstep(current.Row.Size, 2.5, (keymode + 11.0) / 3.0);
 
             // Slow transitions give the hand time to reposition: only fast repeats earn the bonus.
-            shapePay *= 1.0 - DiffUtils.Smoothstep(columnDelta, 120.0, 200.0);
+            shapeBonus *= 1.0 - DiffUtils.Smoothstep(columnDelta, 100.0, 200.0);
 
-            chordSpeedMultiplier *= 1.0 + 0.5 * shapePay * lightGate;
+            chordSpeedMultiplier *= 1.0 + 0.55 * shapeBonus * lightGate;
 
             return ChordUtils.CHORDJACK_NERF * chordSpeedMultiplier;
         }

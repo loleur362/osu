@@ -48,7 +48,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Preprocessing.Patterning.Detectors
         /// </remarks>
         protected double PlateauOf(ManiaRow row, double strength)
         {
-            const double offset_ms = 80.0;
+            const double offset_ms = 30.0;
 
             double gap = row.GapBefore;
 
