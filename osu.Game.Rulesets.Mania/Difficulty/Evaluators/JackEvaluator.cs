@@ -117,8 +117,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             chordSpeedMultiplier += (veryfastMultiplier - fast_mult) * fastRolloff;
 
             // Morphing shapes around the repeat force the hand to re-place while jacking.
-            // Static repeats are pure jackhammer and wide sustained chords have their own
-            // machinery, so only light morphing chords earn extra here.
+            // Repeated chords don't benefit from the bonus.
             double shapePay = 0.0;
 
             if (current.Row.Previous() is { } previous)
@@ -129,8 +128,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double lightGate = 1.0 - DiffUtils.Smoothstep(current.Row.Size, 3.0, 5.0);
 
-            // Slow transitions give the hand time to reposition: only fast repeats
-            // earn the morph bonus. Sparse slow maps pass through untouched.
+            // Slow transitions give the hand time to reposition: only fast repeats earn the bonus.
             shapePay *= 1.0 - DiffUtils.Smoothstep(columnDelta, 120.0, 200.0);
 
             chordSpeedMultiplier *= 1.0 + 0.5 * shapePay * lightGate;

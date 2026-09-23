@@ -85,9 +85,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         }
 
         /// <summary>
-        /// How different two rows are, as a Jaccard distance over their columns:
-        /// 0 for the same shape, 1 for nothing shared.
-        /// Both arrays must be sorted ascending.
+        /// How different two rows are:
+        /// 0 for the same shape (repetition), 1 for nothing shared (trill).
         /// </summary>
         public static double ChordDifference(int[] a, int[] b)
         {
