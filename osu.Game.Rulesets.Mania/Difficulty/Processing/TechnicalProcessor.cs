@@ -84,7 +84,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Processing
             while (recentShapes.Count > variety_window)
                 recentShapes.Dequeue();
 
-            return TechnicalEvaluator.EvaluatePatternVarietyOf(distinctShapeCount());
+            return TechnicalEvaluator.EvaluatePatternVarietyOf(distinctShapeCount(), hitObject.Row.TotalColumns);
         }
 
         /// <summary>
