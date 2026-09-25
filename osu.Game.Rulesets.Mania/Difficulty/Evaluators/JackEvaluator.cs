@@ -97,6 +97,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double veryfast_mult = 0.75;
             const double veryfast_open_mult = 1.45;
 
+            const double shapeBonusWeight = 0.75;
+
             if (chordDepth < 2)
                 return TrillUtils.TrillFactor(current);
 
@@ -118,7 +120,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             // Morphing shapes around the repeat force the hand to re-place while jacking.
             // Repeated chords don't benefit from the bonus.
-            // Trills are obtaining almost the maximum bonus but they are nerfed by trill factor.
             double shapeBonus = 0.0;
 
             if (current.Row.Previous() is { } previous)
@@ -126,9 +127,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 double distance = ColumnPatternUtils.ChordDifference(previous.Columns, current.Row.Columns);
                 shapeBonus = DiffUtils.Smoothstep(distance, 0.15, 0.5);
 
-                if (previous.Previous() is { } prev2
-                    && ColumnPatternUtils.IsRecurrence(prev2.Columns, previous.Columns, current.Row.Columns))
-                    shapeBonus *= 0.35;
+                // Chords sharing no columns at all gets less bonus
+                if (!ColumnPatternUtils.SharesColumn(previous.Columns, current.Row.Columns))
+                    shapeBonus *= 0.7;
 
                 // Static repeats gain a slight nerf
                 if (ColumnPatternUtils.SameColumns(previous.Columns, current.Row.Columns))
@@ -141,7 +142,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Slow transitions give the hand time to reposition: only fast repeats earn the bonus.
             shapeBonus *= 1.0 - DiffUtils.Smoothstep(columnDelta, 100.0, 200.0);
 
-            chordSpeedMultiplier *= 1.0 + 0.55 * shapeBonus * lightGate;
+            chordSpeedMultiplier *= 1.0 + shapeBonusWeight * shapeBonus * lightGate;
 
             return ChordUtils.CHORDJACK_NERF * chordSpeedMultiplier;
         }

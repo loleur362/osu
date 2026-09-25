@@ -1,6 +1,7 @@
 ﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Mania.Difficulty.Preprocessing;
@@ -64,28 +65,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         }
 
         /// <summary>
-        /// Enumerates the end time of the most recent hold in every column other than <paramref name="current"/>'s.
-        /// </summary>
-        private static IEnumerable<double> otherColumnHoldEndTimes(ManiaDifficultyHitObject current)
-        {
-            for (int otherColumn = 0; otherColumn < current.Row.TotalColumns; otherColumn++)
-            {
-                if (otherColumn == current.Column)
-                    continue;
-
-                double otherStartTime = current.LastStartTimeInColumn(otherColumn);
-
-                if (double.IsNegativeInfinity(otherStartTime))
-                    continue;
-
-                if (Math.Abs(otherStartTime - current.StartTime) <= ChordUtils.CHORD_TOLERANCE_MS)
-                    continue;
-
-                yield return current.LastEndTimeInColumn(otherColumn);
-            }
-        }
-
-        /// <summary>
         /// Releases very close together are harder to time apart, so the closest release in any other column that
         /// is still being held is paid for here.
         /// </summary>
@@ -97,10 +76,12 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double closestReleaseDelta = double.PositiveInfinity;
 
-            foreach (double otherEndTime in otherColumnHoldEndTimes(current))
+            foreach (double? endTime in current.LastConcurrentlyReleasedHolds.Select(o => o?.EndTime))
             {
-                if (otherEndTime > current.StartTime)
-                    closestReleaseDelta = Math.Min(closestReleaseDelta, Math.Abs(current.EndTime - otherEndTime));
+                if (endTime is null || Math.Abs(endTime.Value - current.EndTime) <= ChordUtils.CHORD_TOLERANCE_MS)
+                    continue;
+
+                closestReleaseDelta = Math.Min(closestReleaseDelta, Math.Abs(current.EndTime - endTime.Value));
             }
 
             if (double.IsPositiveInfinity(closestReleaseDelta))
@@ -117,13 +98,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             const double release_long_note_weight = 0.4;
 
-            int releasingColumns = 0;
-
-            foreach (double otherEndTime in otherColumnHoldEndTimes(current))
-            {
-                if (otherEndTime > current.EndTime)
-                    releasingColumns++;
-            }
+            int releasingColumns = current.TailOverlappedHolds.Count(o => o is not null);
 
             if (releasingColumns == 0)
                 return 0.0;

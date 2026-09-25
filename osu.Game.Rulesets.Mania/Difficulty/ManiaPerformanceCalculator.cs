@@ -20,12 +20,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty
         private const double base_sr_offset = 0.15;
         private const double base_exponent = 2.470;
 
-        private const double low_end_coefficient = 7.7;
-        private const double low_end_exponent = 1.63;
-
-        private const double variety_floor = 0.88;
-        private const double variety_cap = 1.10;
-
         private int countPerfect;
         private int countGreat;
         private int countGood;
@@ -70,10 +64,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty
 
             double difficultyValue = computeDifficultyValue(maniaAttributes);
             double accuracyScale = computeAccuracyScale(calculateCustomAccuracy(), maniaAttributes);
-            double varietyMultiplier = this.varietyMultiplier(maniaAttributes.Variety);
-            double lengthMultiplier = this.lengthMultiplier(totalHits, maniaAttributes.StarRating);
-            double totalValue = difficultyValue * accuracyScale * varietyMultiplier * lengthMultiplier * multiplier;
-            double valueSS = difficultyValue * varietyMultiplier * lengthMultiplier * multiplier;
+            double totalValue = difficultyValue * accuracyScale * multiplier;
+            double valueSS = difficultyValue * multiplier;
             double value99 = valueSS * computeAccuracyScale(0.99, maniaAttributes);
             double value98 = valueSS * computeAccuracyScale(0.98, maniaAttributes);
             double value97 = valueSS * computeAccuracyScale(0.97, maniaAttributes);
@@ -99,27 +91,11 @@ namespace osu.Game.Rulesets.Mania.Difficulty
             };
         }
 
-        private double varietyMultiplier(double variety)
-        {
-            return variety_floor + DiffUtils.Logistic(variety, 3.7987, 2.0, variety_cap - variety_floor);
-        }
-
-        private double lengthMultiplier(double totalNotes, double starRating)
-        {
-            if (totalNotes <= 0)
-                return 1.0;
-
-            return 1.1 / (1.0 + Math.Sqrt(starRating / (2.0 * totalNotes)));
-        }
-
         private double computeDifficultyValue(ManiaDifficultyAttributes attributes)
         {
             double baseValue = base_coefficient * DiffUtils.Pow(Math.Max(attributes.StarRatingSS - base_sr_offset, 0.05), base_exponent);
 
-            double lowEndBonus = low_end_coefficient * DiffUtils.Pow(attributes.StarRating, low_end_exponent)
-                                                     * DiffUtils.Smoothstep(attributes.StarRating, 7.0, 2.5);
-
-            return (baseValue + lowEndBonus) * denseFastMultiplier(attributes);
+            return baseValue * denseFastMultiplier(attributes);
         }
 
         private double computeAccuracyScale(double accuracy, ManiaDifficultyAttributes attributes)

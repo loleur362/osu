@@ -201,7 +201,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double evennessDamper(ManiaDifficultyHitObject hitObject)
         {
-            const double window_ms = 400.0;
+            const double window_ms = 140.0;
             const int min_steps = 3;
 
             int steps = 0, shared = 0;
