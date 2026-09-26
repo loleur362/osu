@@ -65,13 +65,19 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             int column = current.Column;
             int totalColumns = current.Row.TotalColumns;
-            double total = 0.0;
+            double right = 0.0;
+            double left = 0.0;
 
             if (column > 0)
-                total += columnBoundaryPressure(current, column, left: true, totalColumns);
+                left = columnBoundaryPressure(current, column, left: true, totalColumns);
 
             if (column < totalColumns - 1)
-                total += columnBoundaryPressure(current, column, left: false, totalColumns);
+                right = columnBoundaryPressure(current, column, left: false, totalColumns);
+
+            double total = left + right;
+            if (total == 0.0) return 0.0;
+
+            total = 1.375 * total - 0.625 * Math.Abs(left - right) - 1.5 * left * right / total; // Reduction of total when left and right are uneven: https://www.desmos.com/calculator/opvrobd5k6
 
             return total * TrillUtils.TrillFactor(current) * boundary_pressure_weight * densityDampenFor(current, totalColumns);
         }

@@ -30,7 +30,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             const double tap_rate_offset_ms = 60;
             const double strain_exponent = 1.29407;
-            const double jack_multiplier = 0.62159;
+            const double jack_weight = 0.59714;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.19496; // sqrt(1.42793)
@@ -53,13 +53,13 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             jackDifficulty *= calculateConcurrentHoldBonus(current);
 
             // Repeats that ask for more than their rate suggests.
-            jackDifficulty *= FullChordJackEvaluator.EvaluateMultiplierOf(current, columnDelta, jackDifficulty * jack_multiplier);
+            jackDifficulty *= FullChordJackEvaluator.EvaluateMultiplierOf(current, columnDelta, jackDifficulty * jack_weight);
             jackDifficulty *= current.ManipulationFactor * current.EnduranceFactor * SpeedjackEvaluator.EvaluateMultiplierOf(current) * AnchorEvaluator.EvaluateMultiplierOf(current);
 
             // Repeats the map lets you hit with something other than a jack motion.
             jackDifficulty *= JackSpacingEvaluator.EvaluateMultiplierOf(current, chordDepth, columnDelta, tapRate);
 
-            return jackDifficulty * jack_multiplier * total_weight;
+            return jackDifficulty * jack_weight * total_weight;
         }
 
         /// <summary>
@@ -93,11 +93,11 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double veryfast_ms = 84.0;
 
             const double slow_mult = 0.6;
-            const double fast_mult = 1.4;
+            const double fast_mult = 1.35;
             const double veryfast_mult = 0.75;
             const double veryfast_open_mult = 1.45;
 
-            const double shapeBonusWeight = 0.75;
+            const double shapeBonusWeight = 0.9;
 
             if (chordDepth < 2)
                 return TrillUtils.TrillFactor(current);
@@ -129,7 +129,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
                 // Chords sharing no columns at all gets less bonus
                 if (!ColumnPatternUtils.SharesColumn(previous.Columns, current.Row.Columns))
-                    shapeBonus *= 0.7;
+                    shapeBonus *= 0.2;
 
                 // Static repeats gain a slight nerf
                 if (ColumnPatternUtils.SameColumns(previous.Columns, current.Row.Columns))

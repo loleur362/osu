@@ -24,7 +24,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 return 0.0;
 
             const double tap_rate_offset_ms = 36;
-            const double speed_weight = 1.583;
+            const double speed_weight = 1.613;
 
             // A repeat in the same column is one finger doing the work of two, so it taps slower than its gap suggests.
             const double jack_speed_nerf = 0.49996;
@@ -50,7 +50,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         private static double speedGrowth(ManiaDifficultyHitObject hitObject)
         {
             const double window_ms = 200.0;
-            const double sustain_window_ms = 900.0;
+            const double sustain_window_ms = 700.0;
 
             int rows = 0, longRows = 0, longShared = 0;
 
@@ -80,10 +80,10 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double sustainReward = 0.0;
 
-            if (longRows >= 20)
+            if (longRows >= 14)
             {
                 double longEven = 1.0 - (double)longShared / longRows;
-                sustainReward = 0.5 * DiffUtils.Smoothstep(longRows, 20.0, 30.0) * DiffUtils.Smoothstep(longEven, 0.6, 0.8) * hitObject.ManipulationFactor;
+                sustainReward = 1.45 * DiffUtils.Smoothstep(longRows, 14.0, 24.0) * DiffUtils.Smoothstep(longEven, 0.3, 0.6) * hitObject.ManipulationFactor;
             }
 
             return spikeNerf * (1.0 + sustainReward);
