@@ -133,7 +133,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
                 // Static repeats gain a slight nerf
                 if (ColumnPatternUtils.SameColumns(previous.Columns, current.Row.Columns))
-                    chordSpeedMultiplier *= 0.85;
+                    chordSpeedMultiplier *= 0.7;
             }
 
             double keymode = Math.Min(current.Row.TotalColumns, 9);
