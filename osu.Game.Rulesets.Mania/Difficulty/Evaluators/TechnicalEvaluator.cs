@@ -24,10 +24,10 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
         {
             const double pattern_buff = 0.69740;
-            const double technical_scale = 1.55;
+            const double technical_scale = 1.49964;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
-            const double total_weight = 1.58087; // sqrt(2.49916)
+            const double total_weight = 2.05513; // sqrt(2.49916) * 1.30
 
             double columnComplexity = evaluateColumnComplexityOf(hitObject);
             double speedFactor = 1.0 / (hitObject.DeltaTime / 1000.0 + 0.060);
@@ -119,7 +119,15 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             double moves = DiffUtils.Smoothstep(passage.jackShare, 0.90, 0.65);
             double reforms = DiffUtils.Smoothstep(passage.shapeChange, 0.25, 0.65);
 
-            return 1.0 + 1.9 * density * moves * reforms;
+            // A wide chord is one press and an easy one, so how wide counts for a lot depends on the keymode: the same
+            // chord is a third of a 4K and a seventh of a 10K. Scaling the width it takes to stop being a light chord
+            // by the keymode stops 4K, where almost every chord is narrow enough to pass, from collecting the bonus
+            // nearly everywhere. Most chords are scored here rather than in the jack terms, so this is where the
+            // width has to be answered for.
+            double keymode = Math.Min(hitObject.Row.TotalColumns, 9);
+            double lightGate = 1.0 - DiffUtils.Smoothstep(hitObject.Row.Size, keymode * 0.4, (keymode + 9.5) / 3.0);
+
+            return (1.0 + 1.9 * density * moves * reforms) * lightGate;
         }
 
         /// <summary>
@@ -190,9 +198,46 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 columnComplexity += CrossColumnUtils.AverageBoundaryMultipliersBetween(previous.Column, hitObject.Column, hitObject.Row.TotalColumns);
 
             // Past a certain span the two columns belong to different hands, and the jump between them stops being one hand's problem.
-            double spanDamper = 1.0 - 0.50 * DiffUtils.Smoothstep(Math.Abs(currentDirection), 3.0, 5.5);
+            double spanDamper = 1.0 - 0.60 * DiffUtils.Smoothstep(Math.Abs(currentDirection), 3.0, 5.5);
 
-            return columnComplexity * spanDamper;
+            return columnComplexity * spanDamper * evennessDamper(hitObject);
+        }
+
+        /// <summary>
+        /// How even the columns are in the latest 400ms.
+        /// A complex and technical pattern can matter less when workload is spread across all fingers.
+        /// </summary>
+        private static double evennessDamper(ManiaDifficultyHitObject hitObject)
+        {
+            const double window_ms = 400.0;
+            const int min_steps = 3;
+
+            int steps = 0, shared = 0;
+
+            for (var prev = hitObject.Row.Previous(); prev != null && hitObject.StartTime - prev.StartTime <= window_ms; prev = prev.Previous())
+            {
+                steps++;
+
+                if (ColumnPatternUtils.SharesColumn(hitObject.Row.Columns, prev.Columns))
+                    shared++;
+            }
+
+            double damper = 1.0;
+
+            if (steps >= min_steps)
+            {
+                double evenness = 1.0 - (double)shared / steps;
+
+                // Random play already looks even on high keymodes (fewer repeats by chance),
+                // so measure evenness above the random baseline instead. 4K and below
+                // read exactly as before.
+                if (hitObject.Row.TotalColumns > 4)
+                    evenness = DiffUtils.ReverseLerp(evenness, 1.0 / hitObject.Row.TotalColumns, 1.0);
+
+                damper = 1.0 - 0.5 * DiffUtils.Smoothstep(evenness, 0.55, 0.8);
+            }
+
+            return damper;
         }
     }
 }

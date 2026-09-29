@@ -30,7 +30,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             const double tap_rate_offset_ms = 60;
             const double strain_exponent = 1.29407;
-            const double jack_weight = 0.59714;
+            const double jack_multiplier = 0.5915;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.19496; // sqrt(1.42793)
@@ -44,22 +44,32 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             int chordDepth = ChordUtils.DepthInChord(current);
             double tapRate = 1000.0 / (Math.Max(columnDelta, 1.0) + tap_rate_offset_ms);
 
+            // A chord that shares no column at all with the row before it is a jump rather than a repeat, so it is
+            // not something being jacked. It keeps most of the chord bonus, because a chart built out of chord jumps
+            // is still playing them, but the shape bonus riding on top of it goes entirely.
+            const double pure_jump_chord_bonus = 0.7;
+
+            bool sharesColumn = current.Row.Previous() is { } previousRow
+                                && ColumnPatternUtils.SharesColumn(previousRow.Columns, current.Row.Columns);
+
+            double chordBonusScale = chordDepth >= 2 && !sharesColumn ? pure_jump_chord_bonus : 1.0;
+
             // How quickly the column comes back to itself, scaled by the chord it repeats inside.
-            double jackDifficulty = tapRate * calculateChordJackBonus(current, chordDepth, columnDelta) * calculateSpeedBonus(tapRate);
+            double jackDifficulty = tapRate * calculateChordJackBonus(current, chordDepth, columnDelta) * chordBonusScale * calculateSpeedBonus(tapRate);
 
             jackDifficulty = DiffUtils.Pow(jackDifficulty, strain_exponent);
 
-            jackDifficulty *= calculateChordDepthMultiplier(current, chordDepth, columnDelta);
+            jackDifficulty *= calculateChordDepthMultiplier(current, chordDepth, columnDelta, sharesColumn);
             jackDifficulty *= calculateConcurrentHoldBonus(current);
 
             // Repeats that ask for more than their rate suggests.
-            jackDifficulty *= FullChordJackEvaluator.EvaluateMultiplierOf(current, columnDelta, jackDifficulty * jack_weight);
+            jackDifficulty *= FullChordJackEvaluator.EvaluateMultiplierOf(current, columnDelta, jackDifficulty * jack_multiplier);
             jackDifficulty *= current.ManipulationFactor * current.EnduranceFactor * SpeedjackEvaluator.EvaluateMultiplierOf(current) * AnchorEvaluator.EvaluateMultiplierOf(current);
 
             // Repeats the map lets you hit with something other than a jack motion.
             jackDifficulty *= JackSpacingEvaluator.EvaluateMultiplierOf(current, chordDepth, columnDelta, tapRate);
 
-            return jackDifficulty * jack_weight * total_weight;
+            return jackDifficulty * jack_multiplier * total_weight;
         }
 
         /// <summary>
@@ -86,18 +96,16 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// either side of it, and past ~190bpm a repeat on a wide chord is a roll or vibro that can be mashed, so
         /// it rolls back off. A repeat that fast on jumps and single notes has to be jacked, and keeps its value.
         /// </summary>
-        private static double calculateChordDepthMultiplier(ManiaDifficultyHitObject current, int chordDepth, double columnDelta)
+        private static double calculateChordDepthMultiplier(ManiaDifficultyHitObject current, int chordDepth, double columnDelta, bool sharesColumn)
         {
             const double slow_ms = 140.0;
             const double fast_ms = 100.0;
             const double veryfast_ms = 84.0;
 
             const double slow_mult = 0.6;
-            const double fast_mult = 1.35;
+            const double fast_mult = 1.4;
             const double veryfast_mult = 0.75;
             const double veryfast_open_mult = 1.45;
-
-            const double shapeBonusWeight = 0.9;
 
             if (chordDepth < 2)
                 return TrillUtils.TrillFactor(current);
@@ -118,32 +126,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             chordSpeedMultiplier += (veryfastMultiplier - fast_mult) * fastRolloff;
 
-            // Morphing shapes around the repeat force the hand to re-place while jacking.
-            // Repeated chords don't benefit from the bonus.
-            double shapeBonus = 0.0;
-
-            if (current.Row.Previous() is { } previous)
-            {
-                double distance = ColumnPatternUtils.ChordDifference(previous.Columns, current.Row.Columns);
-                shapeBonus = DiffUtils.Smoothstep(distance, 0.15, 0.5);
-
-                // Chords sharing no columns at all gets less bonus
-                if (!ColumnPatternUtils.SharesColumn(previous.Columns, current.Row.Columns))
-                    shapeBonus *= 0.2;
-
-                // Static repeats gain a slight nerf
-                if (ColumnPatternUtils.SameColumns(previous.Columns, current.Row.Columns))
-                    chordSpeedMultiplier *= 0.7;
-            }
-
-            double keymode = Math.Min(current.Row.TotalColumns, 9);
-            double lightGate = 1.0 - DiffUtils.Smoothstep(current.Row.Size, 2.5, (keymode + 11.0) / 3.0);
-
-            // Slow transitions give the hand time to reposition: only fast repeats earn the bonus.
-            shapeBonus *= 1.0 - DiffUtils.Smoothstep(columnDelta, 100.0, 200.0);
-
-            chordSpeedMultiplier *= 1.0 + shapeBonusWeight * shapeBonus * lightGate;
-
             return ChordUtils.CHORDJACK_NERF * chordSpeedMultiplier;
         }
 
@@ -159,7 +141,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double heldFraction = current.ConcurrentlyHeldColumns(ChordUtils.CHORD_TOLERANCE_MS) / (double)(totalColumns - 1);
 
-            return 1.0 + 0.6 * heldFraction;
+            return 1.0 + 0.75 * heldFraction;
         }
     }
 }

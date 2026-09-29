@@ -15,7 +15,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
 {
     public abstract class ManiaSkill : Skill
     {
-        private const double star_rating_accuracy = 0.965;
+        private const double star_rating_accuracy = 0.9575;
 
         private const int binning_note_threshold = 64;
 
@@ -114,7 +114,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
             if (skill == 0)
                 return 0.0;
 
-            return accuracyDifficulties.Count > binning_note_threshold ? accuracyAtSkillBinned(skill) : AccuracyAtSkillExact(skill);
+            return AccuracyAtSkillExact(skill);
+            // return accuracyDifficulties.Count > binning_note_threshold ? accuracyAtSkillBinned(skill) : AccuracyAtSkillExact(skill);
         }
 
         public double AccuracyAtSkillExact(double skill)

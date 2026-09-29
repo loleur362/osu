@@ -74,16 +74,16 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 if (!double.IsPositiveInfinity(rowGap) && rowGap > 0.0)
                 {
                     double ratio = (1000.0 / rowGap) / (rows / (window_ms / 1000.0));
-                    spikeNerf = 1.0 - 0.6 * DiffUtils.Smoothstep(ratio, 2.0, 4.0);
+                    spikeNerf = 1.0 - 0.5 * DiffUtils.Smoothstep(ratio, 2.0, 4.0);
                 }
             }
 
             double sustainReward = 0.0;
 
-            if (longRows >= 14)
+            if (longRows >= 20)
             {
                 double longEven = 1.0 - (double)longShared / longRows;
-                sustainReward = 1.45 * DiffUtils.Smoothstep(longRows, 14.0, 24.0) * DiffUtils.Smoothstep(longEven, 0.3, 0.6) * hitObject.ManipulationFactor;
+                sustainReward = 0.8 * DiffUtils.Smoothstep(longRows, 20.0, 30.0) * DiffUtils.Smoothstep(longEven, 0.6, 0.8) * hitObject.ManipulationFactor;
             }
 
             return spikeNerf * (1.0 + sustainReward);

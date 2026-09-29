@@ -95,7 +95,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty
         {
             double baseValue = base_coefficient * DiffUtils.Pow(Math.Max(attributes.StarRatingSS - base_sr_offset, 0.05), base_exponent);
 
-            return baseValue * denseFastMultiplier(attributes);
+            return baseValue;
         }
 
         private double computeAccuracyScale(double accuracy, ManiaDifficultyAttributes attributes)
@@ -233,16 +233,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty
         }
 
         #endregion
-
-        private static double denseFastMultiplier(ManiaDifficultyAttributes attributes)
-        {
-            double coActivation = Math.Min(attributes.SpeedDifficulty, attributes.JackDifficulty);
-            double coGate = DiffUtils.Smoothstep(coActivation, 3.01761, 5.02934);
-            double releaseGate = DiffUtils.Smoothstep(attributes.ReleaseDifficulty, 5.20566, 2.60283);
-            double srTaper = DiffUtils.Smoothstep(attributes.StarRating, 13.0, 9.5);
-
-            return 1.0 + 0.18 * coGate * releaseGate * srTaper;
-        }
 
         private double totalHits => countPerfect + countOk + countGreat + countGood + countMeh + countMiss;
         private double totalSuccessfulHits => totalHits - countMiss;

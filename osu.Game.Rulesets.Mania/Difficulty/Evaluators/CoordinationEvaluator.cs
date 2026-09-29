@@ -65,19 +65,13 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             int column = current.Column;
             int totalColumns = current.Row.TotalColumns;
-            double right = 0.0;
-            double left = 0.0;
+            double total = 0.0;
 
             if (column > 0)
-                left = columnBoundaryPressure(current, column, left: true, totalColumns);
+                total += columnBoundaryPressure(current, column, left: true, totalColumns);
 
             if (column < totalColumns - 1)
-                right = columnBoundaryPressure(current, column, left: false, totalColumns);
-
-            double total = left + right;
-            if (total == 0.0) return 0.0;
-
-            total = 1.375 * total - 0.625 * Math.Abs(left - right) - 1.5 * left * right / total; // Reduction of total when left and right are uneven: https://www.desmos.com/calculator/opvrobd5k6
+                total += columnBoundaryPressure(current, column, left: false, totalColumns);
 
             return total * TrillUtils.TrillFactor(current) * boundary_pressure_weight * densityDampenFor(current, totalColumns);
         }
@@ -121,7 +115,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// <summary>
         /// Dampens the difficulty of a hit object based on the density of nearby notes.
         /// </summary>
-        // # Note: This targets rolls and other manipable high density patterns in higher key modes such as 7k where the boundary pressure would accumulate 
+        // # Note: This targets rolls and other manipable high density patterns in higher key modes such as 7k where the boundary pressure would accumulate
         // # because I couldnt manage to catch them in manipdetection for some reason.
         // # In short, BoundaryPressure would accumulate a lot and inflate difficulty while manip detection wont nerf it
         // # because in 7k+ its usually accompagnied with other pattern and the easy roll slips through
@@ -130,7 +124,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double density_window_ms = 180.0;
             const double note_cap = 3.0; // only starts with 3 notes rolls or more
             const double density_dampen_end = 8.0;
-            const double density_dampen_max = 0.75;
+            const double density_dampen_max = 0.91;
 
             int liveNeighbours = 0;
 
@@ -171,6 +165,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         private static double calculateChordDifficulty(ManiaDifficultyHitObject current, int depthInChord, double columnDelta)
         {
             const double load_per_extra_column = 0.9;
+            const double shapeBonusWeight = 1.2;
 
             if (depthInChord < 2)
                 return 0.0;
@@ -178,8 +173,45 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Chordjacks are already paid for by Jack, so the dampening here only targets sustained chord spam.
             bool isChordjack = columnDelta <= JackEvaluator.JACK_WINDOW_MS;
 
-            return load_per_extra_column * (depthInChord - 1) * ChordUtils.ChordRepeatNerf(current, columnDelta)
-                   * (isChordjack ? ChordUtils.CHORDJACK_NERF : 1.0) * ChordUtils.ChordSpeedFactor(columnDelta);
+            double difficulty = load_per_extra_column * (depthInChord - 1) * ChordUtils.ChordRepeatNerf(current, columnDelta)
+                                * (isChordjack ? ChordUtils.CHORDJACK_NERF : 1.0) * ChordUtils.ChordSpeedFactor(columnDelta)
+                                + shapeBonusWeight * calculateShapeBonus(current, columnDelta);
+
+            // The same shape is a movement the hand is already doing rather than new fingers to
+            // place, so it of course requires less coordination overall.
+            if (current.Row.Previous() is { } previousShape && ColumnPatternUtils.SameColumns(previousShape.Columns, current.Row.Columns))
+                difficulty *= 0.5;
+
+            return difficulty / Math.Log(current.Row.Size);
+        }
+
+        /// <summary>
+        /// How much the hand has to re-place itself because the shape around the repeat changed. A shape that shares
+        /// no column with the row before it is a jump rather than a repeat, so it earns none of this, and neither
+        /// does one that follows a single note: a lone note is not a shape to morph out of, and comparing against it
+        /// reports the largest difference available, which hands out the whole bonus for the least effort.
+        /// </summary>
+        private static double calculateShapeBonus(ManiaDifficultyHitObject current, double columnDelta)
+        {
+            if (current.Row.Previous() is not { } previous
+                || previous.Size < 2
+                || !ColumnPatternUtils.SharesColumn(previous.Columns, current.Row.Columns))
+                return 0.0;
+
+            double shapeBonus = DiffUtils.Smoothstep(ColumnPatternUtils.ChordDifference(previous.Columns, current.Row.Columns), 0.3, 0.75);
+
+            // Each column held over costs the hand less than a fresh one, and the more keys there are to spread over,
+            // the less any single one of them means.
+            int shared = ColumnPatternUtils.SharedColumnCount(previous.Columns, current.Row.Columns);
+
+            if (shared > 0)
+            {
+                double keymode = Math.Min(current.Row.TotalColumns, 9);
+                shapeBonus *= Math.Pow(0.57 + keymode * 0.03, shared);
+            }
+
+            // Slow transitions give the hand time to re-place.
+            return shapeBonus * (1.0 - DiffUtils.Smoothstep(columnDelta, 100.0, 200.0));
         }
 
         /// <summary>

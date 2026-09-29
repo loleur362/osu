@@ -30,22 +30,30 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         /// <summary>
         /// Whether <paramref name="a"/> and <paramref name="b"/> have at least one column in common.
         /// </summary>
-        public static bool SharesColumn(int[] a, int[] b)
+        public static bool SharesColumn(int[] a, int[] b) => SharedColumnCount(a, b) > 0;
+
+        /// <summary>
+        /// How many columns the two rows have in common.
+        /// </summary>
+        public static int SharedColumnCount(int[] a, int[] b)
         {
-            int i = 0, j = 0;
+            int i = 0, j = 0, shared = 0;
 
             while (i < a.Length && j < b.Length)
             {
                 if (a[i] == b[j])
-                    return true;
-
-                if (a[i] < b[j])
+                {
+                    shared++;
+                    i++;
+                    j++;
+                }
+                else if (a[i] < b[j])
                     i++;
                 else
                     j++;
             }
 
-            return false;
+            return shared;
         }
 
         /// <summary>
@@ -86,7 +94,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
 
         /// <summary>
         /// How different two rows are:
-        /// 0 for the same shape (repetition), 1 for nothing shared (trill).
+        /// 0 for the same shape (repetition), 1 for nothing shared (none or trill).
         /// </summary>
         public static double ChordDifference(int[] a, int[] b)
         {
