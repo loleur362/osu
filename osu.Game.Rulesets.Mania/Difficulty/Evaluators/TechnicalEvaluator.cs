@@ -24,7 +24,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
         {
             const double pattern_buff = 0.69740;
-            const double technical_scale = 1.95;
+            const double technical_scale = 2.1;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.58087; // sqrt(2.49916)

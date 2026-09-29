@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+﻿﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -35,25 +35,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             coordinationDifficulty *= current.ManipulationFactor * current.EnduranceFactor;
 
-            return saturate(coordinationDifficulty * total_weight);
-        }
-
-        /// <summary>
-        /// Two hands only have so many fingers, so past a point more columns being live at once stops adding
-        /// difficulty as fast. Bends the top of the range over without ever capping it outright.
-        /// </summary>
-        private static double saturate(double strain)
-        {
-            const double threshold = 13.0;
-            const double strength = 0.75;
-            const double width = 1.5;
-
-            // A softplus of the excess above the threshold.
-            // See https://www.desmos.com/calculator/jgnbehwngr
-            double z = (strain - threshold) / width;
-            double softExcess = width * (Math.Max(z, 0.0) + Math.Log(1.0 + Math.Exp(-Math.Abs(z))));
-
-            return strain - strength * softExcess;
+            return coordinationDifficulty * total_weight;
         }
 
         /// <summary>
@@ -61,7 +43,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateBoundaryPressure(ManiaDifficultyHitObject current)
         {
-            const double boundary_pressure_weight = 1.14529;
+            const double boundary_pressure_weight = 1.2;
 
             int column = current.Column;
             int totalColumns = current.Row.TotalColumns;
@@ -89,6 +71,14 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double activity_window_ms = 450.0;
 
             int adjacentColumn = left ? column - 1 : column + 1;
+
+            // The neighbour is already down as part of this same press, so there is no hand sharing a boundary
+            // here to speak of. This has to be asked of the current row: the previous-note lookup below only ever
+            // returns the row before, so a chord's own columns are never within tolerance of it and testing the
+            // delta against CHORD_TOLERANCE_MS can never catch this case.
+            if (Array.IndexOf(current.Row.Columns, adjacentColumn) >= 0)
+                return 0.0;
+
             double adjacentStartTime = current.LastStartTimeInColumn(adjacentColumn);
 
             if (double.IsNegativeInfinity(adjacentStartTime))
@@ -96,7 +86,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double adjacentDelta = current.StartTime - adjacentStartTime;
 
-            // The neighbour is part of this same chord, so it is one press rather than two things to place.
             if (adjacentDelta < ChordUtils.CHORD_TOLERANCE_MS)
                 return 0.0;
 
@@ -164,8 +153,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateChordDifficulty(ManiaDifficultyHitObject current, int depthInChord, double columnDelta)
         {
-            const double load_per_extra_column = 0.9;
-            const double shapeBonusWeight = 1.2;
+            const double load_per_extra_column = 2.8;
+            const double shapeBonusWeight = 1.75;
 
             if (depthInChord < 2)
                 return 0.0;

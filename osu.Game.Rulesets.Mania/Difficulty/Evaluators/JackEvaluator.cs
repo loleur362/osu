@@ -30,7 +30,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             const double tap_rate_offset_ms = 60;
             const double strain_exponent = 1.29407;
-            const double jack_multiplier = 0.5915;
+            const double jack_multiplier = 0.6815;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.19496; // sqrt(1.42793)

@@ -27,8 +27,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
         {
+            const double release_weight = 0.844;
             double releaseDifficulty = 0.0;
-
+            
             if (current.BaseObject is not HoldNote)
                 return releaseDifficulty;
 
@@ -42,7 +43,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             releaseDifficulty += calculateReleaseSpeedBonus(current, longNoteGate);
             releaseDifficulty += calculateReleaseWhileHolds(current, longNoteGate);
 
-            return releaseDifficulty * total_weight;
+            return releaseDifficulty * release_weight * total_weight;
         }
 
         /// <summary>
@@ -115,7 +116,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateReleaseWhileHolds(ManiaDifficultyHitObject current, double longNoteGate)
         {
-            const double release_long_note_weight = 0.4;
+            const double release_long_note_weight = 0.6;
 
             int releasingColumns = 0;
 

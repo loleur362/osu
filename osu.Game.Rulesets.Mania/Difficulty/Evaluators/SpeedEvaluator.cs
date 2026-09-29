@@ -24,7 +24,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 return 0.0;
 
             const double tap_rate_offset_ms = 36;
-            const double speed_weight = 1.613;
+            const double speed_weight = 1.443;
 
             // A repeat in the same column is one finger doing the work of two, so it taps slower than its gap suggests.
             const double jack_speed_nerf = 0.49996;
