@@ -24,7 +24,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
         {
             const double pattern_buff = 0.69740;
-            const double technical_scale = 2.1;
+            const double technical_scale = 1.88;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.58087; // sqrt(2.49916)
@@ -43,7 +43,10 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // so it is paid in proportion to how much they actually do.
             double varietyFloor = 1.55 * patternVariety * readingPressure * DiffUtils.Smoothstep(windowedIrregularity, 0.04, 0.12);
 
-            double complexity = Math.Max(rhythmIrregularity + columnComplexity, varietyFloor);
+            // A gap too short to read leaves nothing for a change of rhythm to register against, so irregularity counts for less the tighter the note is.
+            double rhythmShare = DiffUtils.Smoothstep(hitObject.DeltaTime, 16.0, 70.0);
+
+            double complexity = Math.Max(rhythmIrregularity + columnComplexity, varietyFloor) * rhythmShare;
 
             return pattern_buff * complexity * speedFactor * technical_scale * rhythmAmplifier * chordWidth(hitObject)
                    * hitObject.ManipulationFactor * total_weight;

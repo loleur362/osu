@@ -27,7 +27,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
         {
-            const double release_weight = 0.844;
+            const double release_weight = 0.9;
             double releaseDifficulty = 0.0;
             
             if (current.BaseObject is not HoldNote)

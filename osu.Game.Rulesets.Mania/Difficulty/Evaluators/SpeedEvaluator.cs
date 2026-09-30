@@ -24,10 +24,10 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 return 0.0;
 
             const double tap_rate_offset_ms = 36;
-            const double speed_weight = 1.443;
+            const double speed_weight = 1.6;
 
             // A repeat in the same column is one finger doing the work of two, so it taps slower than its gap suggests.
-            const double jack_speed_nerf = 0.49996;
+            const double jack_speed_nerf = 0.5;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.01112; // sqrt(1.02237)
@@ -49,8 +49,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double speedGrowth(ManiaDifficultyHitObject hitObject)
         {
-            const double window_ms = 200.0;
-            const double sustain_window_ms = 700.0;
+            const double window_ms = 250.0;
+            const double sustain_window_ms = 1000.0;
 
             int rows = 0, longRows = 0, longShared = 0;
 

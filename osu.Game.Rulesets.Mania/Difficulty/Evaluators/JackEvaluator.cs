@@ -30,7 +30,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             const double tap_rate_offset_ms = 60;
             const double strain_exponent = 1.29407;
-            const double jack_multiplier = 0.6815;
+            const double jack_multiplier = 0.6185;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.19496; // sqrt(1.42793)
@@ -44,18 +44,11 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             int chordDepth = ChordUtils.DepthInChord(current);
             double tapRate = 1000.0 / (Math.Max(columnDelta, 1.0) + tap_rate_offset_ms);
 
-            // A chord that shares no column at all with the row before it is a jump rather than a repeat, so it is
-            // not something being jacked. It keeps most of the chord bonus, because a chart built out of chord jumps
-            // is still playing them, but the shape bonus riding on top of it goes entirely.
-            const double pure_jump_chord_bonus = 0.7;
-
             bool sharesColumn = current.Row.Previous() is { } previousRow
                                 && ColumnPatternUtils.SharesColumn(previousRow.Columns, current.Row.Columns);
 
-            double chordBonusScale = chordDepth >= 2 && !sharesColumn ? pure_jump_chord_bonus : 1.0;
-
             // How quickly the column comes back to itself, scaled by the chord it repeats inside.
-            double jackDifficulty = tapRate * calculateChordJackBonus(current, chordDepth, columnDelta) * chordBonusScale * calculateSpeedBonus(tapRate);
+            double jackDifficulty = tapRate * calculateChordJackBonus(current, chordDepth, columnDelta) * calculateSpeedBonus(tapRate);
 
             jackDifficulty = DiffUtils.Pow(jackDifficulty, strain_exponent);
 
@@ -99,12 +92,12 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         private static double calculateChordDepthMultiplier(ManiaDifficultyHitObject current, int chordDepth, double columnDelta, bool sharesColumn)
         {
             const double slow_ms = 140.0;
-            const double fast_ms = 100.0;
-            const double veryfast_ms = 84.0;
+            const double fast_ms = 95.0;
+            const double veryfast_ms = 50.0;
 
-            const double slow_mult = 0.6;
-            const double fast_mult = 1.4;
-            const double veryfast_mult = 0.75;
+            const double slow_mult = 0.55;
+            const double fast_mult = 2.2;
+            const double veryfast_mult = 0.85;
             const double veryfast_open_mult = 1.45;
 
             if (chordDepth < 2)
@@ -120,13 +113,50 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 DiffUtils.Smoothstep(ChordUtils.LocalChordSize(current), 1.9, 2.5),
                 DiffUtils.Smoothstep(ColumnRunUtils.RunLengthAround(current, 1.5 * columnDelta, 32), 2.5, 4.0));
 
-            // Roll the buff back down past ~160bpm, by as much as the chords around it are wide enough to roll.
+            // Roll the buff back down past ~180bpm, by as much as the chords around it are wide enough to roll.
             double fastRolloff = DiffUtils.Smoothstep(columnDelta, fast_ms, veryfast_ms);
             double veryfastMultiplier = veryfast_open_mult + (veryfast_mult - veryfast_open_mult) * rollable;
 
             chordSpeedMultiplier += (veryfastMultiplier - fast_mult) * fastRolloff;
 
+            chordSpeedMultiplier *= calculateHandRestMultiplier(current);
+
             return ChordUtils.CHORDJACK_NERF * chordSpeedMultiplier;
+        }
+
+        /// <summary>
+        /// An empty row in a hand (half of the playfield) gives it time to rest and eases fast patterns.
+        /// </summary>
+        private static double calculateHandRestMultiplier(ManiaDifficultyHitObject current)
+        {
+            const double empty_hand_nerf = 0.75;
+            const double no_shared_column_nerf = 0.9;
+
+            int totalColumns = current.Row.TotalColumns;
+            int[] columns = current.Row.Columns;
+
+            if (current.Row.Previous() is { } previous
+                && !ColumnPatternUtils.SharesColumn(previous.Columns, columns))
+                return no_shared_column_nerf;
+
+            // Half the keymode per hand, and the odd column in the middle goes to the other hand.
+            int handSplit = totalColumns / 2;
+
+            bool leftPlayed = false;
+            bool rightPlayed = false;
+
+            foreach (int column in columns)
+            {
+                if (column < handSplit)
+                    leftPlayed = true;
+                else
+                    rightPlayed = true;
+
+                if (leftPlayed && rightPlayed)
+                    return 1.0;
+            }
+
+            return empty_hand_nerf;
         }
 
         /// <summary>
@@ -134,14 +164,32 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateConcurrentHoldBonus(ManiaDifficultyHitObject current)
         {
+            const double held_bonus_weight = 0.785;
+            const double held_neighbour_weight = 0.95;
             int totalColumns = current.PreviousHitObjects.Length;
 
             if (totalColumns == 1)
                 return 1.0;
 
-            double heldFraction = current.ConcurrentlyHeldColumns(ChordUtils.CHORD_TOLERANCE_MS) / (double)(totalColumns - 1);
+            // A jack next to a note is harder to hit because the hand is already pinned down and can't bounce the finger back up
+            int heldNeighbours = 0;
 
-            return 1.0 + 0.75 * heldFraction;
+            for (int offset = -1; offset <= 1; offset += 2)
+            {
+                int adjacentColumn = current.Column + offset;
+
+                if (adjacentColumn < 0 || adjacentColumn >= totalColumns)
+                    continue;
+
+                // A hold that started in this same chord is part of one press, not a finger already committed.
+                if (Math.Abs(current.LastStartTimeInColumn(adjacentColumn) - current.StartTime) <= ChordUtils.CHORD_TOLERANCE_MS)
+                    continue;
+
+                if (current.LastEndTimeInColumn(adjacentColumn) > current.StartTime + ChordUtils.CHORD_TOLERANCE_MS)
+                    heldNeighbours++;
+            }
+
+            return held_bonus_weight * (1 + heldNeighbours * held_neighbour_weight);
         }
     }
 }

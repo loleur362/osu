@@ -142,6 +142,28 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Preprocessing
         }
 
         /// <summary>
+        /// The latest object in <paramref name="column"/> that comes before <paramref name="afterIndex"/>,
+        /// or null when the column has nothing before that point.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="LastStartTimeInColumn"/>, which reads the shared previous-note array and so only
+        /// ever describes the row before this one, this walks the column's own history. A walk that steps outward
+        /// from a note needs that, or it would read the same row over and over instead of moving back in time.
+        /// </remarks>
+        public ManiaDifficultyHitObject? PrevInColumnBefore(int column, int afterIndex)
+        {
+            var columnObjects = perColumnObjects[column];
+
+            for (int i = columnObjects.Count - 1; i >= 0; i--)
+            {
+                if (columnObjects[i].Index < afterIndex)
+                    return (ManiaDifficultyHitObject)columnObjects[i];
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// The previous object in the same column as this <see cref="ManiaDifficultyHitObject"/>, exclusive of Long Note tails.
         /// </summary>
         /// <param name="backwardsIndex">The number of notes to go back.</param>
