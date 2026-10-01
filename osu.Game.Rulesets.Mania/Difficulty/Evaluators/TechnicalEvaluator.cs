@@ -24,7 +24,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
         {
             const double pattern_buff = 0.69740;
-            const double technical_scale = 1.88;
+            const double technical_scale = 2.11;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.58087; // sqrt(2.49916)
@@ -44,13 +44,46 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             double varietyFloor = 1.55 * patternVariety * readingPressure * DiffUtils.Smoothstep(windowedIrregularity, 0.04, 0.12);
 
             // A gap too short to read leaves nothing for a change of rhythm to register against, so irregularity counts for less the tighter the note is.
-            double rhythmShare = DiffUtils.Smoothstep(hitObject.DeltaTime, 16.0, 70.0);
+            double rhythmShare = DiffUtils.Smoothstep(hitObject.DeltaTime, 12.0, 50.0);
 
             double complexity = Math.Max(rhythmIrregularity + columnComplexity, varietyFloor) * rhythmShare;
 
             return pattern_buff * complexity * speedFactor * technical_scale * rhythmAmplifier * chordWidth(hitObject)
-                   * hitObject.ManipulationFactor * total_weight;
+                   * minijackPressure(hitObject) * hitObject.ManipulationFactor * total_weight;
         }
+
+        /// <summary>
+        /// What it costs to land a minijack in the middle of a fast stream. The hand is flowing through a pattern
+        /// and the jack asks it to stop, which breaks its momentum.
+        /// </summary>
+        private static double minijackPressure(ManiaDifficultyHitObject hitObject)
+        {
+            // Measured sample.
+            const double window_ms_minijack = 200.0;
+
+            // How fast the jack itself has to land for the hand to notice it as a break.
+            const double minijack_fast_ms = 60.0;
+            const double minijack_slow_ms = 120.0;
+
+            // TODO: density cap scales with minijack delta
+            const double notes_peak = 9.0;
+            const double notes_width = 5.0;
+
+            const double minijack_pressure_weight = 1.5;
+
+            if (hitObject.Previous() is not ManiaDifficultyHitObject previous || previous.Column != hitObject.Column)
+                return 1.0;
+
+            int notes = 0;
+
+            for (var row = hitObject.Row.Previous(); row != null && hitObject.StartTime - row.StartTime <= window_ms_minijack; row = row.Previous())
+                notes += row.Size;
+
+            double jackSpeed = DiffUtils.Smoothstep(hitObject.DeltaTime, minijack_fast_ms, minijack_slow_ms);
+
+            return 1.0 + minijack_pressure_weight * jackSpeed * DiffUtils.SmoothstepBellCurve(notes, notes_peak, notes_width);
+        }
+
 
         /// <summary>
         /// How far apart in time two notes have to be before the passage stops reading as one steady spacing.
@@ -122,10 +155,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             double moves = DiffUtils.Smoothstep(passage.jackShare, 0.90, 0.65);
             double reforms = DiffUtils.Smoothstep(passage.shapeChange, 0.25, 0.65);
 
-            double keymode = Math.Min(hitObject.Row.TotalColumns, 9);
-            double lightGate = 1.0 - DiffUtils.Smoothstep(hitObject.Row.Size, keymode * 0.4, (keymode + 9.5) / 3.0);
-
-            return (1.0 + 1.9 * density * moves * reforms) * lightGate;
+            return (1.0 + 1.9 * density * moves * reforms);
         }
 
         /// <summary>
@@ -181,10 +211,21 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             if (hitObject.Previous() is not ManiaDifficultyHitObject previous || hitObject.Previous(1) is not ManiaDifficultyHitObject previous2)
                 return 0.0;
 
+            // A passage written as two streams, one per hand, offset in time so they interleave, reads as a zigzag
+            // if the two are compared against each other, when each hand is travelling in a straight line of its own.
+            // Comparing within the hand is what the move actually costs.
+            int handSplit = hitObject.Row.TotalColumns / 2;
+
+            if ((previous.Column < handSplit) != (hitObject.Column < handSplit))
+                return 0.0;
+
             double columnComplexity = 0.0;
 
             int previousDirection = previous.Column - previous2.Column;
             int currentDirection = hitObject.Column - previous.Column;
+
+            // Past a hand's span the move is not something one hand does, so it stops costing anything more.
+            int span = Math.Min(Math.Abs(currentDirection), handSplit);
 
             if (previousDirection != 0 && currentDirection != 0 && Math.Sign(previousDirection) != Math.Sign(currentDirection))
             {
@@ -192,7 +233,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 columnComplexity += 0.45 + 2.0 * coefficient;
             }
 
-            if (Math.Abs(currentDirection) >= 2)
+            if (span >= 2)
                 columnComplexity += CrossColumnUtils.AverageBoundaryMultipliersBetween(previous.Column, hitObject.Column, hitObject.Row.TotalColumns);
 
             // Past a certain span the two columns belong to different hands, and the jump between them stops being one hand's problem.

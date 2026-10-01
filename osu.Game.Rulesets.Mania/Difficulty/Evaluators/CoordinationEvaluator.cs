@@ -31,7 +31,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             int depthInChord = ChordUtils.DepthInChord(current);
 
             coordinationDifficulty += calculateChordDifficulty(current, depthInChord, columnDelta);
-            coordinationDifficulty += calculateHoldDifficulty(current);
+            coordinationDifficulty += calculateShieldDifficulty(current);
 
             coordinationDifficulty *= current.ManipulationFactor * current.EnduranceFactor;
 
@@ -103,8 +103,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Boundaries sit between columns, so the left side boundary shares this column's index.
             int boundaryIndex = left ? column : column + 1;
 
-            // capping intensity, graces are not nerfed enough
-            double intensity = scale_ms / (adjacentDelta + min_delta_ms);
+            // capping intensity to nerf graces
+            double intensity = Math.Min(scale_ms / (adjacentDelta + min_delta_ms), 20.0);
             double coefficient = CrossColumnUtils.ColumnBoundaryMultiplier(boundaryIndex, totalColumns);
             bool otherActive = adjacentDelta <= activity_window_ms;
 
@@ -122,14 +122,14 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double tightest_gap_ms = 10.0;
             const double max_gap_ms = 70.0;
 
-            const double tightest_nerf = 0.9;
+            const double tightest_nerf = 0.84;
             const double full_nerf = 1.0;
 
             // A long run stacks enough of these to take almost everything, but it still has to be worth something.
-            const double min_dampen = 0.4;
+            const double min_dampen = 0.25;
 
             // A note with two neighbours can't be manipulated as easily, such as in brackets.
-            const double opposite_margin_ms = 20.0;
+            const double opposite_margin_ms = 16.0;
 
             // Streaks of notes with holes are still accounted for but their nerf will weight for less.
             const double after_gap = 0.75;
@@ -205,8 +205,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateChordDifficulty(ManiaDifficultyHitObject current, int depthInChord, double columnDelta)
         {
-            const double load_per_extra_column = 1.75;
-            const double shapeBonusWeight = 1.5;
+            const double load_per_extra_column = 2.7;
+            const double shapeBonusWeight = 1.6;
 
             if (depthInChord < 2)
                 return 0.0;
@@ -245,7 +245,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             if (shared > 0)
             {
                 double keymode = Math.Min(current.Row.TotalColumns, 9);
-                shapeBonus *= Math.Pow(0.6 + keymode * 0.04, shared);
+                shapeBonus *= Math.Min(Math.Pow(0.58 + keymode * 0.04, shared), 0.99);
             }
 
             // Slow transitions give the hand time to re-place.
@@ -253,30 +253,65 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         }
 
         /// <summary>
+        /// A long note with a jack previously is a shield. If the long note needs to be held for an extended period of time,
+        /// the hand has to fight against bouncing the finger up from the jack.
+        /// </summary>
+        private static double calculateShieldDifficulty(ManiaDifficultyHitObject current)
+        {
+            const double shield_weight = 0.75;
+
+            // The same intensity shape the boundary pressure uses.
+            const double scale_ms = 1300.0;
+            const double min_delta_ms = 35.0;
+
+            // Intensity cap.
+            const double max_intensity = 20.0;
+
+            // LN lenght.
+            const double min_shield_ms = 250.0;
+            const double full_shield_ms = 800.0;
+
+            // Only a note that is actually being held can be a shield.
+            double holdLength = current.EndTime - current.StartTime;
+
+            if (holdLength <= 0.0)
+                return 0.0;
+
+            // A long note placed into a column with nothing in it is just where the hand lands.
+            if (current.PrevInColumn(0) is null)
+                return 0.0;
+
+            // The tighter the jack, the harder it is for the hand to hold current note.
+            double intensity = Math.Min(scale_ms / (current.DeltaTime + min_delta_ms), max_intensity);
+
+            return shield_weight * intensity * DiffUtils.ReverseLerp(holdLength, min_shield_ms, full_shield_ms);
+        }
+
+        /// <summary>
         /// Long notes held in other columns take fingers out of play, and the less time there is between presses
         /// the more that costs.
         /// </summary>
-        private static double calculateHoldDifficulty(ManiaDifficultyHitObject current)
-        {
-            const double held_long_note_weight = 0.25;
-            const double held_speed_factor_offset = 0.08;
-            const double hold_start_cap_end_ms = 35.0;
+        // private static double calculateHoldDifficulty(ManiaDifficultyHitObject current)
+        // {
+        //     const double held_long_note_weight = 0.25;
+        //     const double held_speed_factor_offset = 0.08;
+        //     const double hold_start_cap_end_ms = 35.0;
 
-            // High difficulty cap
-            const double soft_ceiling_midpoint = 2.719;
+        //     // High difficulty cap
+        //     const double soft_ceiling_midpoint = 2.719;
 
-            int heldColumns = current.ConcurrentlyHeldColumns(ChordUtils.CHORD_TOLERANCE_MS);
-            if (heldColumns == 0)
-                return 0.0;
+        //     int heldColumns = current.ConcurrentlyHeldColumns(ChordUtils.CHORD_TOLERANCE_MS);
+        //     if (heldColumns == 0)
+        //         return 0.0;
 
-            double heldSpeedFactor = current.DeltaTime >= ChordUtils.CHORD_TOLERANCE_MS ? 1.0 / (current.DeltaTime / 1000.0 + held_speed_factor_offset) : 1.0;
-            double columnFactor = 1.0 / (-25.0 / 66.0 * heldColumns - 5.0 / 11.0) + 2.2;
-            double holdDifficulty = columnFactor * heldSpeedFactor; // https://www.desmos.com/calculator/aoqjrgqqht
-            double difficultyCap = soft_ceiling_midpoint / (soft_ceiling_midpoint + holdDifficulty);
-            // Grace notes are basically chords, they don't have a hold difficulty.
-            double holdStartCap = DiffUtils.Smoothstep(current.DeltaTime, ChordUtils.CHORD_TOLERANCE_MS, hold_start_cap_end_ms);
+        //     double heldSpeedFactor = current.DeltaTime >= ChordUtils.CHORD_TOLERANCE_MS ? 1.0 / (current.DeltaTime / 1000.0 + held_speed_factor_offset) : 1.0;
+        //     double columnFactor = 1.0 / (-25.0 / 66.0 * heldColumns - 5.0 / 11.0) + 2.2;
+        //     double holdDifficulty = columnFactor * heldSpeedFactor; // https://www.desmos.com/calculator/aoqjrgqqht
+        //     double difficultyCap = soft_ceiling_midpoint / (soft_ceiling_midpoint + holdDifficulty);
+        //     // Grace notes are basically chords, they don't have a hold difficulty.
+        //     double holdStartCap = DiffUtils.Smoothstep(current.DeltaTime, ChordUtils.CHORD_TOLERANCE_MS, hold_start_cap_end_ms);
 
-            return holdStartCap * held_long_note_weight * holdDifficulty * difficultyCap;
-        }
+        //     return holdStartCap * held_long_note_weight * holdDifficulty * difficultyCap;
+        // }
     }
 }

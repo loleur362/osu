@@ -30,14 +30,14 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             const double tap_rate_offset_ms = 60;
             const double strain_exponent = 1.29407;
-            const double jack_multiplier = 0.6185;
+            const double jack_multiplier = 0.592;
 
             // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
             const double total_weight = 1.19496; // sqrt(1.42793)
 
             double columnDelta = current.ColumnDelta;
 
-            //TODO: The whole chordjack evaluation could be revamped after all.
+            //TODO: The whole chordjack evaluation IS being revamped.
             if (columnDelta > JACK_WINDOW_MS)
                 return 0.0;
 
@@ -91,35 +91,34 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateChordDepthMultiplier(ManiaDifficultyHitObject current, int chordDepth, double columnDelta, bool sharesColumn)
         {
-            const double slow_ms = 140.0;
-            const double fast_ms = 95.0;
-            const double veryfast_ms = 50.0;
+            const double middle_ms = 100.0;
+            const double smoothness = 3.9;
+            const double midpoint = 1.75;
 
-            const double slow_mult = 0.55;
-            const double fast_mult = 2.2;
-            const double veryfast_mult = 0.85;
-            const double veryfast_open_mult = 1.45;
+            const double middle_value = 2.35344; // This has to match the middle_ms y axis of the function
+            const double saturation_ceiling = 2.6;
+            const double saturation_floor_ms = 10.0;
+            const double slowest_mult = 0.3;
+            const double same_shape_nerf = 0.6;
 
             if (chordDepth < 2)
                 return TrillUtils.TrillFactor(current);
 
-            // Ramp up to the peak, then back down past it.
-            double bpmScale = DiffUtils.Smoothstep(columnDelta, slow_ms, fast_ms);
-            double chordSpeedMultiplier = slow_mult + (fast_mult - slow_mult) * bpmScale;
+            // Past 100ms the curve is on its decaying branch, kept from falling below a slow repeat's floor. https://www.desmos.com/calculator/knpvo3f8xr
+            double chordSpeedMultiplier = Math.Max(slowest_mult, midpoint * smoothness / (0.1 * columnDelta - 11.0 + smoothness));
 
-            // How wide the chords around the repeat are, and how long a run its column plays, together decide
-            // whether the repeat can be rolled through instead of jacked.
-            double rollable = Math.Max(
-                DiffUtils.Smoothstep(ChordUtils.LocalChordSize(current), 1.9, 2.5),
-                DiffUtils.Smoothstep(ColumnRunUtils.RunLengthAround(current, 1.5 * columnDelta, 32), 2.5, 4.0));
+            // Below 100ms a ceilling stops the jack from scaling too much
+            double speedShare = DiffUtils.Smoothstep(columnDelta, saturation_floor_ms, middle_ms);
 
-            // Roll the buff back down past ~180bpm, by as much as the chords around it are wide enough to roll.
-            double fastRolloff = DiffUtils.Smoothstep(columnDelta, fast_ms, veryfast_ms);
-            double veryfastMultiplier = veryfast_open_mult + (veryfast_mult - veryfast_open_mult) * rollable;
-
-            chordSpeedMultiplier += (veryfastMultiplier - fast_mult) * fastRolloff;
+            if (speedShare < 1.0)
+                chordSpeedMultiplier = middle_value + (saturation_ceiling - middle_value) * (1.0 - speedShare);
 
             chordSpeedMultiplier *= calculateHandRestMultiplier(current);
+
+            // The same shape again is one press the hand is already doing rather than a new one to place.
+            if (current.Row.Previous() is { } previousShape
+                && ColumnPatternUtils.SameColumns(previousShape.Columns, current.Row.Columns))
+                chordSpeedMultiplier *= same_shape_nerf;
 
             return ChordUtils.CHORDJACK_NERF * chordSpeedMultiplier;
         }
