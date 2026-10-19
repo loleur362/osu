@@ -11,27 +11,15 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
     /// A note's difficulty, expressed as the skill needed to hit it at each of
     /// <see cref="AccuracyValueMultipliers.ACCURACY_VALUES"/>.
     /// </summary>
-    /// <remarks>
-    /// Carrying the whole curve instead of a single number is what lets a map be read at an accuracy rather
-    /// than in the abstract: a note far below the player's skill is worth full accuracy no matter how much
-    /// further below it goes, so easy filler stops being able to add difficulty.
-    /// </remarks>
     public readonly struct AccuracyDifficulties
     {
-        /// <summary>
-        /// The accuracy the raw strain is taken to describe, as an index into
-        /// <see cref="AccuracyValueMultipliers.ACCURACY_VALUES"/>. Every other point is relative to it.
-        /// </summary>
-        private const int base_difficulty_index = 3; // The difficulty at 98%.
-
         public double BaseDifficulty { get; }
 
         public double[] Multipliers { get; }
 
-        public AccuracyDifficulties(double difficulty, AccuracyValueMultipliers multipliers)
+        public AccuracyDifficulties(double baseDifficulty, AccuracyValueMultipliers multipliers)
+            : this(baseDifficulty, multipliers.AccuracyMultipliers)
         {
-            BaseDifficulty = difficulty;
-            Multipliers = multipliers.AccuracyMultipliers;
         }
 
         private AccuracyDifficulties(double baseDifficulty, double[] multipliers)
@@ -43,60 +31,49 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         /// <summary>
         /// The absolute skill this note asks for at a given accuracy index.
         /// </summary>
-        private double getDifficulty(int index) => BaseDifficulty * Multipliers[index];
-
-        /// <summary>
-        /// Rebuilds a base difficulty and a set of relative multipliers out of absolute skill values, so that
-        /// the result of combining two curves is stored the same way as the curves that went into it.
-        /// </summary>
-        private static AccuracyDifficulties fromDifficultyArray(double[] difficulties)
-        {
-            double baseDifficulty = difficulties[base_difficulty_index];
-
-            for (int i = 0; i < difficulties.Length; i++)
-                difficulties[i] = baseDifficulty != 0 ? difficulties[i] / baseDifficulty : 0;
-
-            return new AccuracyDifficulties(baseDifficulty, difficulties);
-        }
+        private double getDifficulty(int index) => index == 0 ? BaseDifficulty : BaseDifficulty * Multipliers[index];
 
         public static AccuracyDifficulties Pow(AccuracyDifficulties difficultiesBase, int exponent)
         {
-            double[] newDifficulties = new double[AccuracyValueMultipliers.ACCURACY_VALUES.Length];
+            double newBaseDifficulty = DiffUtils.Pow(difficultiesBase.BaseDifficulty, exponent);
 
-            for (int i = 0; i < AccuracyValueMultipliers.ACCURACY_VALUES.Length - 1; i++)
-                newDifficulties[i] = DiffUtils.Pow(difficultiesBase.getDifficulty(i), exponent);
+            double[] newMultipliers = new double[difficultiesBase.Multipliers.Length];
 
-            return fromDifficultyArray(newDifficulties);
+            for (int i = 0; i < difficultiesBase.Multipliers.Length; i++)
+                newMultipliers[i] = DiffUtils.Pow(difficultiesBase.Multipliers[i], exponent);
+
+            return new AccuracyDifficulties(newBaseDifficulty, newMultipliers);
         }
 
         public static AccuracyDifficulties Pow(AccuracyDifficulties difficultiesBase, double exponent)
         {
-            double[] newDifficulties = new double[AccuracyValueMultipliers.ACCURACY_VALUES.Length];
+            double newBaseDifficulty = Math.Pow(difficultiesBase.BaseDifficulty, exponent);
 
-            for (int i = 0; i < AccuracyValueMultipliers.ACCURACY_VALUES.Length - 1; i++)
-                newDifficulties[i] = Math.Pow(difficultiesBase.getDifficulty(i), exponent);
+            double[] newMultipliers = new double[difficultiesBase.Multipliers.Length];
 
-            return fromDifficultyArray(newDifficulties);
+            for (int i = 0; i < difficultiesBase.Multipliers.Length; i++)
+                newMultipliers[i] = Math.Pow(difficultiesBase.Multipliers[i], exponent);
+
+            return new AccuracyDifficulties(newBaseDifficulty, newMultipliers);
         }
 
         public static AccuracyDifficulties operator +(AccuracyDifficulties left, AccuracyDifficulties right)
         {
-            double[] newDifficulties = new double[AccuracyValueMultipliers.ACCURACY_VALUES.Length];
+            double newBaseDifficulty = left.BaseDifficulty + right.BaseDifficulty;
 
-            for (int i = 0; i < AccuracyValueMultipliers.ACCURACY_VALUES.Length - 1; i++)
-                newDifficulties[i] = left.getDifficulty(i) + right.getDifficulty(i);
+            double[] newMultipliers = new double[left.Multipliers.Length];
 
-            return fromDifficultyArray(newDifficulties);
+            for (int i = 0; i < left.Multipliers.Length - 1; i++)
+                newMultipliers[i] = newBaseDifficulty > 0 ? (left.getDifficulty(i) + right.getDifficulty(i)) / newBaseDifficulty : 1;
+
+            return new AccuracyDifficulties(newBaseDifficulty, newMultipliers);
         }
 
         public static AccuracyDifficulties operator *(AccuracyDifficulties left, double right)
         {
-            double[] newDifficulties = new double[AccuracyValueMultipliers.ACCURACY_VALUES.Length];
+            double newBaseDifficulty = left.BaseDifficulty * right;
 
-            for (int i = 0; i < AccuracyValueMultipliers.ACCURACY_VALUES.Length - 1; i++)
-                newDifficulties[i] = left.getDifficulty(i) * right;
-
-            return fromDifficultyArray(newDifficulties);
+            return new AccuracyDifficulties(newBaseDifficulty, left.Multipliers);
         }
 
         /// <summary>
@@ -121,33 +98,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
                 double lowerAccuracyBound = AccuracyValueMultipliers.ACCURACY_VALUES[i];
 
                 return Interpolation.Lerp(lowerAccuracyBound, upperAccuracyBound, (skill - lowerSkillBound) / (upperSkillBound - lowerSkillBound));
-            }
-
-            return 0;
-        }
-
-        /// <summary>
-        /// The skill needed to hit this note at the given accuracy.
-        /// </summary>
-        public double DifficultyAt(double accuracy)
-        {
-            if (accuracy >= AccuracyValueMultipliers.ACCURACY_VALUES[0])
-                return getDifficulty(0);
-            if (accuracy <= AccuracyValueMultipliers.ACCURACY_VALUES[^1])
-                return getDifficulty(Multipliers.Length - 1);
-
-            for (int i = 1; i < Multipliers.Length; i++)
-            {
-                if (AccuracyValueMultipliers.ACCURACY_VALUES[i] > accuracy)
-                    continue;
-
-                double upperSkillBound = getDifficulty(i - 1);
-                double lowerSkillBound = getDifficulty(i);
-
-                double upperAccuracyBound = AccuracyValueMultipliers.ACCURACY_VALUES[i - 1];
-                double lowerAccuracyBound = AccuracyValueMultipliers.ACCURACY_VALUES[i];
-
-                return Interpolation.Lerp(lowerSkillBound, upperSkillBound, (accuracy - lowerAccuracyBound) / (upperAccuracyBound - lowerAccuracyBound));
             }
 
             return 0;

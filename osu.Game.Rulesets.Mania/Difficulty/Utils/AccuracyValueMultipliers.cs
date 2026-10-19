@@ -23,8 +23,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         public readonly double[] AccuracyMultipliers;
 
         public AccuracyValueMultipliers(
-            double multiplierAtSS,
-            double multiplierAt99_5,
+            double multiplierAt995,
             double multiplierAt99,
             double multiplierAt98,
             double multiplierAt95,
@@ -34,8 +33,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         {
             AccuracyMultipliers = new[]
             {
-                multiplierAtSS,
-                multiplierAt99_5,
+                1.0, // An SS on the note is the base difficulty.
+                multiplierAt995,
                 multiplierAt99,
                 multiplierAt98,
                 multiplierAt95,

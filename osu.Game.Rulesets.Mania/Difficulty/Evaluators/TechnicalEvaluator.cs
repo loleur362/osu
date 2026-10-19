@@ -11,6 +11,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class TechnicalEvaluator
     {
+        private const double technical_weight = 4.04;
 
         /// <summary>
         /// Evaluates how hard the current note is to read and place as a pattern, based on:
@@ -23,12 +24,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
         {
-            const double pattern_buff = 0.69740;
-            const double technical_weight = 2.51;
-
-            // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
-            const double total_weight = 1.58087; // sqrt(2.49916)
-
             double columnComplexity = evaluateColumnComplexityOf(hitObject);
             double speedFactor = 1.0 / (hitObject.DeltaTime / 1000.0 + 0.060);
             double readingPressure = readingPressureOf(hitObject);
@@ -48,10 +43,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double complexity = (Math.Max(rhythmIrregularity + columnComplexity, varietyFloor) + burstReward(patternVariety, windowedIrregularity)) * rhythmShare;
 
-            return pattern_buff * complexity * speedFactor * technical_weight * rhythmAmplifier * chordWidth(hitObject)
-                    * hitObject.ManipulationFactor * total_weight;
+            return complexity * speedFactor * rhythmAmplifier * chordWidth(hitObject) * hitObject.ManipulationFactor * technical_weight;
         }
-
 
         /// <summary>
         /// How far apart in time two notes have to be before the passage stops reading as one steady spacing.

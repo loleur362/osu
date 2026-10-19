@@ -4,13 +4,14 @@
 using System;
 using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Mania.Difficulty.Preprocessing;
-using osu.Game.Rulesets.Mania.Difficulty.Preprocessing.Patterning;
 using osu.Game.Rulesets.Mania.Difficulty.Utils;
 
 namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class CoordinationEvaluator
     {
+        private const double coordination_multiplier = 2.22;
+
         /// <summary>
         /// Evaluates the difficulty of placing the current note relative to everything the other fingers are
         /// doing, based on:
@@ -20,12 +21,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// <item><description>and how many long notes are being held when it is hit.</description></item>
         /// </list>
         /// </summary>
-
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
         {
-            // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
-            const double total_weight = 1.81659; // sqrt(3.3)
-
             double coordinationDifficulty = calculateBoundaryPressure(current);
 
             double columnDelta = current.ColumnDelta;
@@ -38,7 +35,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             coordinationDifficulty *= current.ManipulationFactor * current.EnduranceFactor;
 
-            return saturate(coordinationDifficulty * total_weight);
+            return saturate(coordinationDifficulty * coordination_multiplier);
         }
 
         /// <summary>

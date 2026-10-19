@@ -11,6 +11,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class JackEvaluator
     {
+        private const double jack_multiplier = 0.9144;
+
         /// <summary>
         /// Column gaps longer than this are too far apart to be jacked at all.
         /// </summary>
@@ -30,13 +32,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         {
             const double tap_rate_offset_ms = 60;
             const double strain_exponent = 1.29407;
-            const double jack_multiplier = 1.05;
-
-            // Scales every jack, kept separate from the hold bonus so nerfing one never touches the other.
-            const double jack_scale = 0.72;
-
-            // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
-            const double total_weight = 1.19496; // sqrt(1.42793)
 
             double columnDelta = current.ColumnDelta;
 
@@ -65,7 +60,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Repeats the map lets you hit with something other than a jack motion.
             jackDifficulty *= JackSpacingEvaluator.EvaluateMultiplierOf(current, chordDepth, columnDelta, tapRate);
 
-            return speedCap(jackDifficulty * jack_multiplier * jack_scale * total_weight);
+            return speedCap(jackDifficulty * jack_multiplier);
         }
 
         /// <summary>

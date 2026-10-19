@@ -9,6 +9,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class SpeedEvaluator
     {
+        private const double speed_weight = 2.55;
+
         /// <summary>
         /// Evaluates the difficulty of tapping the current note, based on:
         /// <list type="bullet">
@@ -24,14 +26,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 return 0.0;
 
             const double tap_rate_offset_ms = 36;
-            const double speed_weight = 1.64;
 
             // A repeat in the same column is one finger doing the work of two, so it taps slower than its gap suggests.
             const double jack_speed_nerf = 0.5;
-
-            // A dense single stream carries its difficulty in the rate itself rather than in the shapes around
-            // it, and this was carrying the smallest share of the quadrature of the four tap skills.
-            const double total_weight = 1.3; // sqrt(1.69)
 
             double tapRate = 1000.0 / (hitObject.DeltaTime + tap_rate_offset_ms);
             tapRate *= speedGrowth(hitObject);
@@ -40,7 +37,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double patternMultiplier = isJack ? jack_speed_nerf : TrillUtils.TrillFactor(hitObject);
 
-            return tapRate * patternMultiplier * previousRowMultiplier(hitObject) * speed_weight * hitObject.ManipulationFactor * hitObject.EnduranceFactor * total_weight;
+            return tapRate * patternMultiplier * previousRowMultiplier(hitObject) * hitObject.ManipulationFactor * hitObject.EnduranceFactor * speed_weight;
         }
 
         /// <summary>

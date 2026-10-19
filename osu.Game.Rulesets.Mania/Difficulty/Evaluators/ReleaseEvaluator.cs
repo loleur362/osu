@@ -12,6 +12,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class ReleaseEvaluator
     {
+        private const double release_weight = 4.65;
+
         /// <summary>
         /// Holds longer than this are all the same amount of work to keep held, so the duration is capped here
         /// before anything reads it.
@@ -28,14 +30,10 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
         {
-            const double release_weight = 1.06;
             double releaseDifficulty = 0.0;
-            
+
             if (current.BaseObject is not HoldNote)
                 return releaseDifficulty;
-
-            // Release is not combined in quadrature with the tap skills, so it carries its whole weight here.
-            const double total_weight = 2.83449;
 
             double duration = Math.Min(current.EndTime - current.StartTime, max_long_note_duration_ms);
             double longNoteGate = longNoteGateOf(duration);
@@ -45,7 +43,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             releaseDifficulty *= current.HeldNoteMultiplier;
 
-            return releaseDifficulty * release_weight * total_weight;
+            return releaseDifficulty * release_weight;
         }
 
         /// <summary>

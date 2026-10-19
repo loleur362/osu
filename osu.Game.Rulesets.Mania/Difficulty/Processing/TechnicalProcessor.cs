@@ -14,14 +14,13 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Processing
     {
         private static readonly AccuracyValueMultipliers multipliers = new AccuracyValueMultipliers
         (
-            multiplierAtSS: 1.46,
-            multiplierAt99_5: 1.38,
-            multiplierAt99: 1.25,
-            multiplierAt98: 1.1,
-            multiplierAt95: 0.88,
-            multiplierAt90: 0.7,
-            multiplierAt85: 0.55,
-            multiplierAt80: 0.25
+            multiplierAt995: 0.945,
+            multiplierAt99: 0.85,
+            multiplierAt98: 0.75,
+            multiplierAt95: 0.60,
+            multiplierAt90: 0.48,
+            multiplierAt85: 0.38,
+            multiplierAt80: 0.17
         );
 
         public double CurrentStrain { get; private set; }
