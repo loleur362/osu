@@ -140,8 +140,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateChordDifficulty(ManiaDifficultyHitObject current, int depthInChord, double columnDelta)
         {
-            const double load_per_extra_column = 2.75;
-            const double shapeBonusWeight = 3.0;
+            const double load_per_extra_column = 2.69;
+            const double shapeBonusWeight = 2.4;
 
             if (depthInChord < 2)
                 return 0.0;
