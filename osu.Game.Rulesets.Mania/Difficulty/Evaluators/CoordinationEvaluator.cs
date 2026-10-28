@@ -4,14 +4,13 @@
 using System;
 using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Mania.Difficulty.Preprocessing;
+using osu.Game.Rulesets.Mania.Difficulty.Preprocessing.Patterning;
 using osu.Game.Rulesets.Mania.Difficulty.Utils;
 
 namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class CoordinationEvaluator
     {
-        private const double coordination_multiplier = 2.22;
-
         /// <summary>
         /// Evaluates the difficulty of placing the current note relative to everything the other fingers are
         /// doing, based on:
@@ -21,8 +20,12 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// <item><description>and how many long notes are being held when it is hit.</description></item>
         /// </list>
         /// </summary>
+
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
         {
+            // Total combines the tap skills in quadrature, so this evaluator carries the square root of its weight.
+            const double total_weight = 1.81659; // sqrt(3.3)
+
             double coordinationDifficulty = calculateBoundaryPressure(current);
 
             double columnDelta = current.ColumnDelta;
@@ -30,19 +33,23 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             coordinationDifficulty += calculateChordDifficulty(current, depthInChord, columnDelta);
             coordinationDifficulty += calculateShieldDifficulty(current);
+            coordinationDifficulty += calculateNoteWhileHolds(current);
 
             coordinationDifficulty *= minijackPressure(current);
 
             coordinationDifficulty *= current.ManipulationFactor * current.EnduranceFactor;
 
-            return saturate(coordinationDifficulty * coordination_multiplier);
+            return coordinationDifficulty * total_weight;
         }
 
         /// <summary>
         /// Two hands only have so many fingers, so past a point more columns being live at once stops adding
         /// difficulty as fast. Bends the top of the range over without ever capping it outright.
         /// </summary>
-        private static double saturate(double strain)
+        /// 
+        /// May not be needed anymore, higher SR is already kinda compressed.
+        /// 
+        /* private static double saturate(double strain)
         {
             const double threshold = 20.0;
             const double strength = 0.5;
@@ -54,7 +61,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             double softExcess = width * (Math.Max(z, 0.0) + Math.Log(1.0 + Math.Exp(-Math.Abs(z))));
 
             return strain - strength * softExcess;
-        }
+        } */
 
         /// <summary>
         /// Calculates the difficulty of both column boundaries for this column, with a boundary being the hypothetical "middle" of two columns.
@@ -221,16 +228,19 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// A long note with a jack previously is a shield. If the long note needs to be held for an extended period of time,
         /// the hand has to fight against bouncing the finger up from the jack.
         /// </summary>
+        ///         Hard shield  -->  O O===========|
+        /// 
+        ///         Easy shields -->  O   O=======| 
+        ///                           O O===|
         private static double calculateShieldDifficulty(ManiaDifficultyHitObject current)
         {
-            const double shield_weight = 0.75;
+            const double shield_weight = 1.00;
 
-            // The same intensity shape the boundary pressure uses.
-            const double scale_ms = 1300.0;
-            const double min_delta_ms = 35.0;
+            const double jack_scale_ms = 120.0;
+            const double jack_intensity = 320000.0;
 
-            const double min_shield_ms = 250.0;
-            const double full_shield_ms = 800.0;
+            const double min_shield_ms = 150;
+            const double full_shield_ms = 600;
 
             // Only a note that is actually being held can be a shield.
             double holdLength = current.EndTime - current.StartTime;
@@ -241,10 +251,20 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             if (current.PrevInColumn(0) is null)
                 return 0.0;
 
-            // The tighter the jack, the harder it is for the hand to hold current note.
-            double intensity = Math.Min(scale_ms / (current.DeltaTime + min_delta_ms), 20.0);
+            double intensity = Math.Min(jack_intensity / (current.ColumnDelta * (current.ColumnDelta + jack_scale_ms)), 20.0);
 
             return shield_weight * intensity * DiffUtils.ReverseLerp(holdLength, min_shield_ms, full_shield_ms);
+        }
+
+        /// <summary>
+        /// Other held notes makes the movement of a hit harder, the hand is already comitted to a note
+        /// and spends more energy managing other patterns.
+        /// </summary>
+        private static double calculateNoteWhileHolds(ManiaDifficultyHitObject current)
+        {
+            const double held_note_weight = 1.5;
+
+            return held_note_weight * (current.HeldNoteMultiplier - 1.0);
         }
 
         /// <summary>
@@ -252,7 +272,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// dominant skill instead of only jack.
         /// </summary>
         /// <remark>
-        /// It currently activates kinda randomly, needs to be improved.
+        /// note 1: It currently activates kinda randomly, needs to be improved.
+        /// note 2: okay it really is a mess lol ill try to simplify it later, I genuinely forgot what some of that do.
         /// </remark>
         private static double minijackPressure(ManiaDifficultyHitObject hitObject)
         {
@@ -264,8 +285,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             const double window_ms_minijack = 300.0;
 
-            const double minijack_fast_ms = 60.0;
-            const double minijack_slow_ms = 120.0;
+            const double minijack_fast_ms = 40.0;
+            const double minijack_slow_ms = 135.0;
 
             // How much faster than the previous part the column has to come back to count as a minijack.
             const double acceleration_min = 1.0;
@@ -310,7 +331,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double localDensity = DiffUtils.Smoothstep(localNotes, local_density_low, local_density_high);
 
-            double minijackMult = 1.0;
+            double minijackMult = DiffUtils.Smoothstep(jackDelta, minijack_slow_ms, minijack_fast_ms);
+            
+            if (minijackMult <= 0) return 1.0;
 
             foreach (int column in hitObject.Row.Columns)
             {

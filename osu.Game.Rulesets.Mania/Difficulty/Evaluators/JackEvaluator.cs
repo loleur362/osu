@@ -88,7 +88,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             const double saturation_ceiling = 2.75;
             const double saturation_floor_ms = 10.0;
             const double slowest_mult = 0.3;
-            const double same_shape_nerf = 0.6;
+            const double same_shape_nerf = 0.85;
 
             if (chordDepth < 2)
                 return TrillUtils.TrillFactor(current);
@@ -156,6 +156,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // How much the long notes being held add to the jack, on top of the neighbours above. This is the
             // held-note bonus; too nerf it, lower this rather than any global scale.
             const double held_note_weight = 1.0;
+            const double held_neighbour_min_remaining_ms = 200.0;
             int totalColumns = current.PreviousHitObjects.Length;
 
             if (totalColumns == 1)
@@ -175,11 +176,12 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
                 if (Math.Abs(current.LastStartTimeInColumn(adjacentColumn) - current.StartTime) <= ChordUtils.CHORD_TOLERANCE_MS)
                     continue;
 
-                if (current.LastEndTimeInColumn(adjacentColumn) > current.StartTime + ChordUtils.CHORD_TOLERANCE_MS)
+                if (current.LastEndTimeInColumn(adjacentColumn) > current.StartTime + held_neighbour_min_remaining_ms)
                     heldNeighbours++;
             }
 
-            return (1 + heldNeighbours * held_neighbour_weight)
+            double heldNeighbourShare = current.HeldNoteMultiplier - 1.0;
+            return (1 + heldNeighbours * held_neighbour_weight * heldNeighbourShare)
                    * (1.0 + held_note_weight * (current.HeldNoteMultiplier - 1.0));
         }
 
