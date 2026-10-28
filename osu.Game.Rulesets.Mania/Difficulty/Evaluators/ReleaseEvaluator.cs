@@ -28,7 +28,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject current)
         {
-            const double release_weight = 1.06;
+            const double release_weight = 0.87;
             double releaseDifficulty = 0.0;
             
             if (current.BaseObject is not HoldNote)
@@ -86,7 +86,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double calculateReleaseWhileHolds(ManiaDifficultyHitObject current, double longNoteGate)
         {
-            const double release_long_note_weight = 0.4;
+            const double release_long_note_weight = 0.45;
 
             return release_long_note_weight * (current.HeldNoteMultiplier - 1.0) * longNoteGate * nextNoteNerf(current);
         }
@@ -98,8 +98,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double nextNoteNerf(ManiaDifficultyHitObject current)
         {
-            const double min_ms = 40.0;
-            const double max_ms = 190.0;
+            const double min_ms = 110.0;
+            const double max_ms = 180.0;
+            const double lowest = 0.23;
 
             ManiaDifficultyHitObject? nextInColumn = current.NextInColumn(0);
 
@@ -109,12 +110,12 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             double gap = nextInColumn.StartTime - current.EndTime;
 
             if (gap <= min_ms)
-                return 0.0;
+                return lowest;
 
             if (gap >= max_ms)
                 return 1.0;
 
-            return DiffUtils.Smoothstep(gap, min_ms, max_ms);
+            return lowest + (1 - lowest) * DiffUtils.Smoothstep(gap, min_ms, max_ms);
         }
     }
 }

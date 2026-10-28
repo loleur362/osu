@@ -33,7 +33,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
 
         protected override AccuracyDifficulties AccuracyDifficultiesAt(DifficultyHitObject current)
         {
-            const double release_weight = 0.72;
+            const double release_weight = 1.00;
             const int combine_lambda = 2;
 
             AccuracyDifficulties coordinationDifficulty = coordinationProcessor.TransformStrainToAccuracyDifficulties(coordinationProcessor.CurrentStrain);
