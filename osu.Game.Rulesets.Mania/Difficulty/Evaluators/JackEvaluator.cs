@@ -11,7 +11,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class JackEvaluator
     {
-        private const double jack_multiplier = 0.9144;
+        private const double jack_multiplier = 0.8644;
 
         /// <summary>
         /// Column gaps longer than this are too far apart to be jacked at all.
@@ -35,7 +35,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             double columnDelta = current.ColumnDelta;
 
-            //TODO: The whole chordjack evaluation IS being revamped.
             if (columnDelta > JACK_WINDOW_MS)
                 return 0.0;
 
@@ -60,7 +59,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // Repeats the map lets you hit with something other than a jack motion.
             jackDifficulty *= JackSpacingEvaluator.EvaluateMultiplierOf(current, chordDepth, columnDelta, tapRate);
 
-            return speedCap(jackDifficulty * jack_multiplier);
+            return jackDifficulty * jack_multiplier;
         }
 
         /// <summary>
@@ -69,7 +68,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         private static double calculateChordJackBonus(ManiaDifficultyHitObject current, int chordDepth, double columnDelta)
         {
             return Math.Max(0.1,
-                (1.0 + 0.05 * ChordUtils.ChordSpeedFactor(columnDelta) * (chordDepth - 1))
+                (1.0 + 0.06 * ChordUtils.ChordSpeedFactor(columnDelta) * (chordDepth - 1))
                 * ChordUtils.ChordRepeatNerf(current, columnDelta));
         }
 
@@ -81,8 +80,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         private static double calculateChordDepthMultiplier(ManiaDifficultyHitObject current, int chordDepth, double columnDelta, bool sharesColumn)
         {
             const double middle_ms = 100.0;
-            const double smoothness = 5.0;
-            const double midpoint = 1.8;
+            const double smoothness = 6.0;
+            const double midpoint = 1.875;
 
             const double middle_value = 2.25; // This has to match the middle_ms y axis of the function
             const double saturation_ceiling = 2.75;

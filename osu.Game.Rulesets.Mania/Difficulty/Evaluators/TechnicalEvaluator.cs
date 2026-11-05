@@ -11,7 +11,24 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class TechnicalEvaluator
     {
-        private const double technical_weight = 4.04;
+        private const double technical_weight = 4.88;
+
+        private const double minijack_ms_slow = 140.0;
+        private const double minijack_ms_fast = 75.0;
+
+        /// <summary>
+        /// How many rows to look back when deciding whether the current passage is a chordjack.
+        /// </summary>
+        private const int chordjack_window_rows = 8;
+
+        private const double chordjack_density_start = 0.30;
+        private const double chordjack_density_end = 0.50;
+
+        /// <summary>
+        /// A repeat only counts as chordjack context when it is at most this many times slower than the
+        /// minijack being evaluated. A minijack that is faster than the notes around it still stands out.
+        /// </summary>
+        private const double chordjack_rate_margin = 1.1;
 
         /// <summary>
         /// Evaluates how hard the current note is to read and place as a pattern, based on:
@@ -19,7 +36,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// <item><description>how much its spacing differs from the spacing before it,</description></item>
         /// <item><description>the shape the hand has to make to reach its column,</description></item>
         /// <item><description>how much vocabulary the passage around it is written in,</description></item>
-        /// <item><description>and how wide the presses around it are.</description></item>
+        /// <item><description>how wide the presses around it are,</description></item>
+        /// <item><description>and how sharply a column repeats itself mid-flow.</description></item>
         /// </list>
         /// </summary>
         public static double EvaluateDifficultyOf(ManiaDifficultyHitObject hitObject, double rhythmIrregularity, double patternVariety, double windowedIrregularity)
@@ -36,14 +54,16 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             // distinct shapes purely by visiting its columns in a different order while its spacing never changes
             // which is what an ordinary stream does. The floor exists for a passage whose spacings genuinely differ,
             // so it is paid in proportion to how much they actually do.
-            double varietyFloor = 1.55 * patternVariety * readingPressure * DiffUtils.Smoothstep(windowedIrregularity, 0.04, 0.12);
+            double varietyFloor = 1.45 * patternVariety * readingPressure * DiffUtils.Smoothstep(windowedIrregularity, 0.04, 0.12);
 
             // A gap too short to read leaves nothing for a change of rhythm to register against, so irregularity counts for less the tighter the note is.
-            double rhythmShare = DiffUtils.Smoothstep(hitObject.DeltaTime, 8.0, 30.0);
+            double rhythmShare = DiffUtils.Smoothstep(hitObject.DeltaTime, 10.0, 40.0);
 
-            double complexity = (Math.Max(rhythmIrregularity + columnComplexity, varietyFloor) + burstReward(patternVariety, windowedIrregularity)) * rhythmShare;
+            double complexity = Math.Max(rhythmIrregularity * rhythmShare + columnComplexity, varietyFloor);
 
-            return complexity * speedFactor * rhythmAmplifier * chordWidth(hitObject) * hitObject.ManipulationFactor * technical_weight;
+            double difficulty = complexity * speedFactor * rhythmAmplifier * chordWidth(hitObject) * minijackPressure(hitObject);
+
+            return difficulty * hitObject.ManipulationFactor * technical_weight;
         }
 
         /// <summary>
@@ -169,35 +189,77 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double evaluateColumnComplexityOf(ManiaDifficultyHitObject hitObject)
         {
-            if (hitObject.Previous() is not ManiaDifficultyHitObject previous || hitObject.Previous(1) is not ManiaDifficultyHitObject previous2)
+            if (hitObject.Row.Previous() is not ManiaRow previousRow || previousRow.Previous() is not ManiaRow previous2Row)
                 return 0.0;
 
             int handSplit = hitObject.Row.TotalColumns / 2;
 
-            if ((previous.Column < handSplit) != (hitObject.Column < handSplit))
+            int previousColumn = closestColumn(previousRow, hitObject.Column, handSplit, hitObject.Column);
+            int previous2Column = closestColumn(previous2Row, previousColumn);
+
+            if ((previousColumn < handSplit) != (hitObject.Column < handSplit))
                 return 0.0;
 
             double columnComplexity = 0.0;
 
-            int previousDirection = previous.Column - previous2.Column;
-            int currentDirection = hitObject.Column - previous.Column;
+            int previousDirection = previousColumn - previous2Column;
+            int currentDirection = hitObject.Column - previousColumn;
 
             // Past a hand's span the move is not something one hand does, so it stops costing anything more.
             int span = Math.Min(Math.Abs(currentDirection), handSplit);
 
             if (previousDirection != 0 && currentDirection != 0 && Math.Sign(previousDirection) != Math.Sign(currentDirection))
             {
-                double coefficient = CrossColumnUtils.SumBoundaryMultipliersBetween(previous.Column, hitObject.Column, hitObject.Row.TotalColumns);
+                double coefficient = CrossColumnUtils.SumBoundaryMultipliersBetween(previousColumn, hitObject.Column, hitObject.Row.TotalColumns);
                 columnComplexity += 0.45 + 2.0 * coefficient;
             }
 
             if (span >= 2)
-                columnComplexity += CrossColumnUtils.AverageBoundaryMultipliersBetween(previous.Column, hitObject.Column, hitObject.Row.TotalColumns);
+                columnComplexity += CrossColumnUtils.AverageBoundaryMultipliersBetween(previousColumn, hitObject.Column, hitObject.Row.TotalColumns);
 
             // Past a certain span the two columns belong to different hands, and the jump between them stops being one hand's problem.
-            double spanDamper = 1.0 - 0.60 * DiffUtils.Smoothstep(Math.Abs(currentDirection), 3.0, 5.5);
+            double spanDamper = 1.0 - 0.75 * DiffUtils.Smoothstep(Math.Abs(currentDirection), 3.0, 5.5);
 
             return columnComplexity * spanDamper;
+        }
+
+        /// <summary>
+        /// The column in <paramref name="row"/> closest to <paramref name="target"/>.
+        /// </summary>
+        private static int closestColumn(ManiaRow row, int target)
+            => closestColumn(row, target, -1, -1);
+
+        /// <summary>
+        /// The column in <paramref name="row"/> closest to <paramref name="target"/>, preferring a column on
+        /// the same hand as <paramref name="handColumn"/> when two columns are equally close.
+        /// </summary>
+        private static int closestColumn(ManiaRow row, int target, int handSplit, int handColumn)
+        {
+            int column = row.Columns[0];
+            int distance = Math.Abs(column - target);
+            bool hasSameHand = handSplit >= 0 && (column < handSplit) == (handColumn < handSplit);
+            int sameHandColumn = column;
+
+            for (int i = 1; i < row.Columns.Length; i++)
+            {
+                int candidate = row.Columns[i];
+                int candidateDistance = Math.Abs(candidate - target);
+
+                if (candidateDistance < distance)
+                {
+                    column = candidate;
+                    distance = candidateDistance;
+                    sameHandColumn = candidate;
+                    hasSameHand = handSplit >= 0 && (candidate < handSplit) == (handColumn < handSplit);
+                }
+                else if (candidateDistance == distance && handSplit >= 0 && (candidate < handSplit) == (handColumn < handSplit))
+                {
+                    sameHandColumn = candidate;
+                    hasSameHand = true;
+                }
+            }
+
+            return hasSameHand ? sameHandColumn : column;
         }
 
         /// <summary>
@@ -206,9 +268,137 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
         /// </summary>
         private static double burstReward(double patternVariety, double windowedIrregularity)
         {
-            const double burst_weight = 1.75;
+            const double burst_weight = 0.0;
 
             return burst_weight * patternVariety * DiffUtils.Smoothstep(windowedIrregularity, 0.16, 0.30);
+        }
+
+        /// <summary>
+        /// How much a same-column repeat in the middle of a flow adds to the pattern's technical demand.
+        /// The repeat has to be fast, dense, and a genuine speed-up over the column's previous gap; when
+        /// other columns are already jacking at the same rate, the repeat is less of a standalone spike.
+        /// </summary>
+        private static double minijackPressure(ManiaDifficultyHitObject hitObject)
+        {
+            // Technical difficulty is evaluated once per row, so a minijack in any of the row's other
+            // columns would otherwise be missed.
+            double best = 0.0;
+
+            foreach (var rowObject in hitObject.Row.Objects)
+                best = Math.Max(best, minijackPressureOfNote(rowObject));
+
+            return best;
+        }
+
+        /// <summary>
+        /// How much of a minijack the surrounding passage still reads as. Repeated columns are a
+        /// standalone technical spike in a stream, but a wall of chordjacks is already covered by the
+        /// jack and coordination skills.
+        /// </summary>
+        private static double minijackIsolation(ManiaDifficultyHitObject hitObject, double jackDelta)
+        {
+            double repeatedNotes = 0;
+            int totalNotes = 0;
+            var row = hitObject.Row;
+
+            for (int i = 0; i < chordjack_window_rows && row != null; i++, row = row.Previous())
+            {
+                foreach (var note in row.Objects)
+                {
+                    totalNotes++;
+
+                    if (note.PrevInColumn(0) is not { } previousNote)
+                        continue;
+
+                    double noteDelta = note.StartTime - previousNote.StartTime;
+
+                    if (noteDelta <= 0.0)
+                        continue;
+
+                    // Only repeats at a comparable rate make this minijack part of the jack texture.
+                    // A much slower surrounding repeat leaves the minijack as the faster, distinct note.
+                    repeatedNotes += DiffUtils.Smoothstep(noteDelta, jackDelta * chordjack_rate_margin, jackDelta);
+                }
+            }
+
+            if (totalNotes == 0)
+                return 1.0;
+
+            double density = repeatedNotes / totalNotes;
+
+            return 1.0 - DiffUtils.Smoothstep(density, chordjack_density_start, chordjack_density_end);
+        }
+
+        /// <summary>
+        /// The minijack pressure of one note in a row.
+        /// </summary>
+        /// please work
+        private static double minijackPressureOfNote(ManiaDifficultyHitObject hitObject)
+        {
+            const double minijack_weight = 4.5;
+
+            // A minijack is worth less when other columns are jacking just as hard.
+            const double other_jack_penalty = 0.75;
+            const double other_jack_margin = 1.2;
+            const double minijack_mult_floor = 0.02;
+
+            if (hitObject.PrevInColumn(0) is not { } previousNote)
+                return 1.0;
+
+            double jackDelta = hitObject.StartTime - previousNote.StartTime;
+
+            double multiplier = DiffUtils.Smoothstep(jackDelta, minijack_ms_slow, minijack_ms_fast);
+
+            if (multiplier <= 0.0)
+                return 1.0;
+
+            double isolation = minijackIsolation(hitObject, jackDelta);
+
+            if (isolation <= 0.0)
+                return 1.0;
+
+            // A minijack only reads as one when the hand is already moving through a dense passage.
+            int rowCount = 0;
+
+            for (var row = hitObject.Row; row != null && hitObject.StartTime - row.StartTime <= jackDelta * 5.0; row = row.Previous())
+                rowCount++;
+
+            multiplier *= DiffUtils.Smoothstep(rowCount, 4.0, 5.5);
+
+            if (multiplier <= 0.0)
+                return 1.0;
+
+            // Reward a repeat that is faster than the gap the column had before it.
+            double acceleration = 1.0;
+
+            if (previousNote.PrevInColumn(0) is { } beforePrevious)
+            {
+                acceleration = (previousNote.StartTime - beforePrevious.StartTime) / Math.Max(jackDelta, 1.0);
+                acceleration = DiffUtils.Smoothstep(Math.Min(acceleration, 5.0), 1.0, 2.5);
+            }
+
+            // If other columns are already repeating at a similar rate, this is not a fresh minijack.
+            double otherJackMultiplier = 1.0;
+
+            for (int column = 0; column < hitObject.PreviousHitObjects.Length; column++)
+            {
+                if (column == hitObject.Column)
+                    continue;
+
+                if (hitObject.PreviousHitObjects[column] is not { } neighbour
+                    || hitObject.StartTime - neighbour.StartTime > jackDelta * 5.0
+                    || neighbour.PrevInColumn(0) is not { } before)
+                    continue;
+
+                double otherDelta = neighbour.StartTime - before.StartTime;
+
+                if (otherDelta > 0.0 && otherDelta <= jackDelta * other_jack_margin)
+                    otherJackMultiplier *= other_jack_penalty;
+            }
+
+            multiplier *= Math.Max(otherJackMultiplier, minijack_mult_floor);
+
+            return 1 + minijack_weight * multiplier * acceleration * isolation;
         }
     }
 }

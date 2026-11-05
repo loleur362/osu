@@ -48,7 +48,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         public static double ChordSpeedFactor(double columnDelta)
         {
             const double factor_min = 0.1;
-            const double factor_max = 2.0;
+            const double factor_max = 2.5;
 
             if (double.IsPositiveInfinity(columnDelta))
                 return 1.0;

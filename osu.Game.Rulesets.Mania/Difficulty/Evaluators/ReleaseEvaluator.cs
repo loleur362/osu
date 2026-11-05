@@ -12,8 +12,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class ReleaseEvaluator
     {
-        // The 0.87 release tune with its quadrature weight (2.83449) and the former 1.55x SS accuracy
-        // factor folded in, now that accuracy multipliers are relative to SS.
         private const double release_weight = 3.8165;
 
         /// <summary>
@@ -45,7 +43,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 
             releaseDifficulty *= current.HeldNoteMultiplier;
 
-            return releaseDifficulty * release_weight;
+            return releaseDifficulty * release_weight * 0.8;
         }
 
         /// <summary>

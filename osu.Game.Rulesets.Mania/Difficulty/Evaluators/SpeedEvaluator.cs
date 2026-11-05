@@ -9,7 +9,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
 {
     public static class SpeedEvaluator
     {
-        private const double speed_weight = 2.55;
+        private const double speed_weight = 2.4;
 
         /// <summary>
         /// Evaluates the difficulty of tapping the current note, based on:
@@ -103,7 +103,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Evaluators
             if (longRows >= 20)
             {
                 double longEven = 1.0 - (double)longShared / longRows;
-                sustainReward = 0.75 * DiffUtils.Smoothstep(longRows, 20.0, 30.0) * DiffUtils.Smoothstep(longEven, 0.6, 0.8) * hitObject.ManipulationFactor;
+                sustainReward = 1.2 * DiffUtils.Smoothstep(longRows, 20.0, 30.0) * DiffUtils.Smoothstep(longEven, 0.6, 0.8) * hitObject.ManipulationFactor;
             }
 
             return spikeNerf * (1.0 + sustainReward);
