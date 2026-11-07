@@ -2,7 +2,6 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Difficulty.Skills;
@@ -16,40 +15,35 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
     public abstract class ManiaSkill : Skill
     {
         private const double star_rating_accuracy = 0.9575;
+        private const double ss_damp = 300;
 
-        private const int binning_note_threshold = 64;
-
-        private readonly List<double> sortedDifficulties = new List<double>();
-        private readonly List<AccuracyDifficulties> accuracyDifficulties = new List<AccuracyDifficulties>();
-        private readonly BinnedDifficulties binnedDifficulties = new BinnedDifficulties();
+        private readonly CurveBinning binnedDifficulties;
 
         private double totalNoteWeight;
-        private bool isSorted;
 
-        protected ManiaSkill(Mod[] mods)
+        private const double accuracy_prob = 1e-6;
+
+        private readonly DifficultyHitWindows hitWindows;
+
+        protected ManiaSkill(Mod[] mods, double overallDifficulty, double minCurveScale, double maxCurveScale)
             : base(mods)
         {
+            hitWindows = new DifficultyHitWindows(overallDifficulty);
+            binnedDifficulties = new CurveBinning(minCurveScale, maxCurveScale);
         }
 
         protected override double ProcessInternal(DifficultyHitObject current)
         {
             totalNoteWeight += getNoteWeight(current);
 
-            AccuracyDifficulties difficulties = AccuracyDifficultiesAt(current);
+            NoteAccuracyCurve curve = AccuracyCurveAt(current);
 
-            if (difficulties.BaseDifficulty > 0)
-            {
-                sortedDifficulties.Add(difficulties.BaseDifficulty);
-                isSorted = false;
-            }
+            binnedDifficulties.AddToBins(curve);
 
-            accuracyDifficulties.Add(difficulties);
-            binnedDifficulties.Add(difficulties);
-
-            return difficulties.BaseDifficulty;
+            return curve.Difficulty;
         }
 
-        protected abstract AccuracyDifficulties AccuracyDifficultiesAt(DifficultyHitObject current);
+        protected abstract NoteAccuracyCurve AccuracyCurveAt(DifficultyHitObject current);
 
         private static double getNoteWeight(DifficultyHitObject current)
         {
@@ -67,128 +61,105 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
             return noteWeight;
         }
 
-        public double SustainRatio()
-        {
-            if (sortedDifficulties.Count == 0)
-                return 1.0;
-
-            sortDifficulties();
-
-            double median = strainAtPercentile(0.50);
-            double high = strainAtPercentile(0.90);
-
-            return high > 0 ? median / high : 1.0;
-        }
-
-        public double CountDifficultStrains()
-        {
-            if (sortedDifficulties.Count == 0)
-                return 0.0;
-
-            sortDifficulties();
-
-            double top = strainAtPercentile(0.93);
-
-            if (top <= 0)
-                return sortedDifficulties.Count;
-
-            return sortedDifficulties.Sum(s => DiffUtils.Logistic(s / top, 0.88, 10.0, 1.1));
-        }
-
         public override double DifficultyValue() => DifficultyValueAtAccuracy(star_rating_accuracy);
 
         public double DifficultyValueAtAccuracy(double accuracy)
         {
-            if (accuracyDifficulties.Count == 0 || accuracy <= AccuracyValueMultipliers.ACCURACY_VALUES[^1])
+            if (binnedDifficulties.Count == 0)
                 return 0.0;
 
-            double rawDifficulty = RootFinding.FindRootExpand(skill => AccuracyAtSkill(skill) - accuracy, 0, 10);
+            double rawDifficulty = RootFinding.FindRootExpand(skill => AccuracyAtSkill(skill) - accuracy, 0, 100);
 
             const double note_count_offset = 34.64147;
 
-            return rawDifficulty * (totalNoteWeight / (totalNoteWeight + note_count_offset));
+            return rawDifficulty; // * (totalNoteWeight / (totalNoteWeight + note_count_offset));
         }
 
         public double AccuracyAtSkill(double skill)
         {
-            if (skill == 0)
+            if (skill <= 0)
                 return 0.0;
 
-            return AccuracyAtSkillExact(skill);
-            // return accuracyDifficulties.Count > binning_note_threshold ? accuracyAtSkillBinned(skill) : AccuracyAtSkillExact(skill);
+            double sum = 0;
+            double varSum = 0;
+            double gammaSum = 0;
+
+            foreach (var bin in binnedDifficulties.Bins)
+            {
+                if (bin.Count == 0)
+                    continue;
+
+                var noteProbs = getNoteProbabilities(bin.Curve, skill);
+
+                sum += bin.Count * noteProbs.Score;
+                varSum += bin.Count * noteProbs.Variance;
+                gammaSum += bin.Count * noteProbs.Gamma;
+            }
+
+            sum += binnedDifficulties.ZeroDifficultyNoteCount * ManiaPerformanceCalculator.MAX_JUDGEMENT_WEIGHT;
+
+            double mean = sum;
+            double dev = Math.Sqrt(varSum) + ss_damp;
+            double gamma = gammaSum;
+
+            double maxScore = binnedDifficulties.Count * ManiaPerformanceCalculator.MAX_JUDGEMENT_WEIGHT;
+
+            PoissonBinomial poiBin = new PoissonBinomial(mean, dev, gamma);
+
+            double score = RootFinding.FindRootExpand(accuracy => (1 - poiBin.CDF(accuracy)) - accuracy_prob, 0, maxScore);
+
+            return score / maxScore;
         }
 
-        public double AccuracyAtSkillExact(double skill)
+        private JudgementProbs getNoteProbabilities(NoteAccuracyCurve curve, double skill)
         {
-            double accuracySum = 0.0;
+            if (skill >= curve.Difficulty) return new JudgementProbs(1, 0, 0, 0, 0);
+            if (skill <= 0) return new JudgementProbs(0, 0, 0, 0, 0);
 
-            foreach (AccuracyDifficulties difficulties in accuracyDifficulties)
-                accuracySum += difficulties.AccuracyAt(skill);
+            double sqrt2 = Math.Sqrt(2);
 
-            // Return the accuracy value, but we subtract 1% of the notes from the divisor so that an SS isn't just the difficulty of the highest note.
-            return accuracySum / (accuracyDifficulties.Count - Math.Min(accuracyDifficulties.Count * 0.01, 10));
-        }
+            double dev = sqrt2 * (NoteAccuracyCurve.MAX_UNSTABLE_RATE / 10.0) * Math.Pow(1 - skill / curve.Difficulty, 1 / curve.ScaleFactor);
 
-        private double accuracyAtSkillBinned(double skill)
-        {
-            double accuracySum = 0.0;
+            double pMax = DiffUtils.Erf(hitWindows.HMax / (DiffUtils.SQRT2 * dev));
+            double p300 = DiffUtils.Erf(hitWindows.H300 / (DiffUtils.SQRT2 * dev));
+            double p200 = DiffUtils.Erf(hitWindows.H200 / (DiffUtils.SQRT2 * dev));
+            double p100 = DiffUtils.Erf(hitWindows.H100 / (DiffUtils.SQRT2 * dev));
+            double p50 = DiffUtils.Erf(hitWindows.H50 / (DiffUtils.SQRT2 * dev));
 
-            foreach (Bin bin in binnedDifficulties.Bins)
-                accuracySum += bin.AccuracyAt(skill) * bin.Count;
-
-            // Return the accuracy value, but we subtract 1% of the notes from the divisor so that an SS isn't just the difficulty of the highest note.
-            return accuracySum / (accuracyDifficulties.Count - Math.Min(accuracyDifficulties.Count * 0.01, 10));
+            return new JudgementProbs(pMax, p300 - pMax, p200 - p300, p100 - p200, p50 - p100);
         }
 
         /// <summary>
         /// The coefficients of a quartic fitted to the miss counts at each skill level.
         /// </summary>
         /// <returns>The coefficients for our penalty polynomial.</returns>
-        public PolynomialPenaltyUtils.QuarticCoefficients GetScoreLossCoefficients(double ssSkill)
+        public AccuracyPenalties GetAccuracyPenalties(double ssSkill)
         {
-            Dictionary<double, double> scoreLosses = new Dictionary<double, double>();
+            AccuracyPenalties accuracyPenalties = new AccuracyPenalties();
+            accuracyPenalties.Accuracies[0] = 1;
 
-            // If there are no notes, we just return a zero-polynomial.
+            // If there are no notes, we just return.
             if (ObjectDifficulties.Count == 0 || ObjectDifficulties.Max() == 0)
-                return new PolynomialPenaltyUtils.QuarticCoefficients();
+                return accuracyPenalties;
 
-            foreach (double skillProportion in PolynomialPenaltyUtils.SKILL_PROPORTIONS)
+            for (int i = 1; i < accuracyPenalties.Accuracies.Length; i++)
             {
-                if (skillProportion == 1)
-                {
-                    scoreLosses[skillProportion] = 0;
-                    continue;
-                }
+                double penaltyValue = AccuracyPenalties.PENALTY_VALUES[i];
 
-                double penalizedSkill = ssSkill * skillProportion;
+                double penalizedSkill = ssSkill * penaltyValue;
 
-                // We take the log to squash miss counts, which have large absolute value differences, but low relative differences, into a straighter line for the polynomial.
-                scoreLosses[skillProportion] = Math.Log((1.0 - AccuracyAtSkillExact(penalizedSkill)) + 1);
+                // We transform the value quite a bit to squash accuracy losses, which are minute at high skill and vast at low skill, into a straighter line for the polynomial.
+                accuracyPenalties.Accuracies[i] = AccuracyAtSkill(penalizedSkill);
             }
 
-            return PolynomialPenaltyUtils.GetPenaltyCoefficients(scoreLosses);
+            // List<(double Actual, double Polynomial)> benchmarks = accuracies.Keys.Zip(accuracies.Select(x => 1 - PolynomialPenaltyUtils.GetPenaltyAt(coefficients, x.Value))).ToList();
+            // double maxError = benchmarks.Select(x => Math.Abs(x.Actual - x.Polynomial)).Max();
+            //
+            // Debug.Assert(maxError < 0.01, $"maxError: {maxError} was greater than 0.01");
+
+            return accuracyPenalties;
         }
 
-        /// <summary>
-        /// Sorts the recorded difficulties, which every reader below needs and none of them change.
-        /// </summary>
-        private void sortDifficulties()
-        {
-            if (isSorted)
-                return;
-
-            sortedDifficulties.Sort();
-            isSorted = true;
-        }
-
-        private double strainAtPercentile(double percentile) => valueAtPercentile(sortedDifficulties, percentile);
-
-        private static double valueAtPercentile(List<double> sortedValues, double percentile)
-        {
-            int maxIndex = sortedValues.Count - 1;
-            int index = Math.Clamp((int)Math.Round(maxIndex * percentile), 0, maxIndex);
-
-            return sortedValues[index];
-        }
+        public static double SquishForPolynomial(double scoreLoss) => scoreLoss; // Math.Log(700 * scoreLoss + 1);
     }
 }

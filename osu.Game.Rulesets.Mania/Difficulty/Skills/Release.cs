@@ -10,19 +10,21 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
 {
     public class Release : ManiaSkill
     {
+        public const double ACCURACY_SCALE_FACTOR = 1.05;
+
         private readonly IDifficultyProcessor releaseProcessor;
 
-        public Release(Mod[] mods, IDifficultyProcessor releaseProcessor)
-            : base(mods)
+        public Release(Mod[] mods, IDifficultyProcessor releaseProcessor, double overallDifficulty)
+            : base(mods, overallDifficulty, ACCURACY_SCALE_FACTOR, ACCURACY_SCALE_FACTOR)
         {
             this.releaseProcessor = releaseProcessor;
         }
 
-        protected override AccuracyDifficulties AccuracyDifficultiesAt(DifficultyHitObject current)
+        protected override NoteAccuracyCurve AccuracyCurveAt(DifficultyHitObject current)
         {
             releaseProcessor.ProcessStrainFor(current);
 
-            return releaseProcessor.TransformStrainToAccuracyDifficulties(releaseProcessor.CurrentStrain);
+            return new NoteAccuracyCurve { Difficulty = releaseProcessor.CurrentStrain, ScaleFactor = ACCURACY_SCALE_FACTOR };
         }
     }
 }

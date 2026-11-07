@@ -21,8 +21,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
                      IReadonlyDifficultyProcessor jackProcessor,
                      IReadonlyDifficultyProcessor releaseProcessor,
                      IReadonlyDifficultyProcessor speedProcessor,
-                     IReadonlyDifficultyProcessor technicalProcessor)
-            : base(mods)
+                     IReadonlyDifficultyProcessor technicalProcessor,
+                     double overallDifficulty)
+            : base(mods, overallDifficulty, Release.ACCURACY_SCALE_FACTOR, Jack.ACCURACY_SCALE_FACTOR)
         {
             this.coordinationProcessor = coordinationProcessor;
             this.jackProcessor = jackProcessor;
@@ -31,25 +32,20 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
             this.technicalProcessor = technicalProcessor;
         }
 
-        protected override AccuracyDifficulties AccuracyDifficultiesAt(DifficultyHitObject current)
+        protected override NoteAccuracyCurve AccuracyCurveAt(DifficultyHitObject current)
         {
-            const double release_weight = 1.00;
-            const int combine_lambda = 2;
+            const double combine_lambda = 2;
 
-            AccuracyDifficulties coordinationDifficulty = coordinationProcessor.TransformStrainToAccuracyDifficulties(coordinationProcessor.CurrentStrain);
-            AccuracyDifficulties releaseDifficulty = releaseProcessor.TransformStrainToAccuracyDifficulties(releaseProcessor.CurrentStrain);
-            AccuracyDifficulties speedDifficulty = speedProcessor.TransformStrainToAccuracyDifficulties(speedProcessor.CurrentStrain);
-            AccuracyDifficulties jackDifficulty = jackProcessor.TransformStrainToAccuracyDifficulties(jackProcessor.CurrentStrain);
-            AccuracyDifficulties technicalDifficulty = technicalProcessor.TransformStrainToAccuracyDifficulties(technicalProcessor.CurrentStrain);
+            NoteAccuracyCurve coordination = new NoteAccuracyCurve { Difficulty = coordinationProcessor.CurrentStrain, ScaleFactor = Coordination.ACCURACY_SCALE_FACTOR };
+            NoteAccuracyCurve jack = new NoteAccuracyCurve { Difficulty = jackProcessor.CurrentStrain, ScaleFactor = Jack.ACCURACY_SCALE_FACTOR };
+            NoteAccuracyCurve release = new NoteAccuracyCurve { Difficulty = releaseProcessor.CurrentStrain, ScaleFactor = Release.ACCURACY_SCALE_FACTOR };
+            NoteAccuracyCurve speed = new NoteAccuracyCurve { Difficulty = speedProcessor.CurrentStrain, ScaleFactor = Speed.ACCURACY_SCALE_FACTOR };
+            NoteAccuracyCurve technical = new NoteAccuracyCurve { Difficulty = technicalProcessor.CurrentStrain, ScaleFactor = Technical.ACCURACY_SCALE_FACTOR };
 
-            AccuracyDifficulties powerSum = AccuracyDifficulties.Pow(speedDifficulty, combine_lambda)
-                                            + AccuracyDifficulties.Pow(jackDifficulty, combine_lambda)
-                                            + AccuracyDifficulties.Pow(coordinationDifficulty, combine_lambda)
-                                            + AccuracyDifficulties.Pow(technicalDifficulty, combine_lambda);
+            NoteAccuracyCurve tap = NoteAccuracyCurve.PNormSum(combine_lambda, speed, jack, coordination, technical);
 
-            AccuracyDifficulties tapDifficulty = powerSum.BaseDifficulty > 0 ? AccuracyDifficulties.Pow(powerSum, 1.0 / combine_lambda) : powerSum;
-
-            return tapDifficulty + releaseDifficulty * release_weight;
+            // Release is added linearly (p = 1) on top of the tap difficulty.
+            return NoteAccuracyCurve.PNormSum(1, tap, release);
         }
     }
 }

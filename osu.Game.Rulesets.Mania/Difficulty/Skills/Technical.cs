@@ -10,19 +10,21 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
 {
     public class Technical : ManiaSkill
     {
+        public const double ACCURACY_SCALE_FACTOR = 1.3;
+
         private readonly IDifficultyProcessor technicalProcessor;
 
-        public Technical(Mod[] mods, IDifficultyProcessor technicalProcessor)
-            : base(mods)
+        public Technical(Mod[] mods, IDifficultyProcessor technicalProcessor, double overallDifficulty)
+            : base(mods, overallDifficulty, ACCURACY_SCALE_FACTOR, ACCURACY_SCALE_FACTOR)
         {
             this.technicalProcessor = technicalProcessor;
         }
 
-        protected override AccuracyDifficulties AccuracyDifficultiesAt(DifficultyHitObject current)
+        protected override NoteAccuracyCurve AccuracyCurveAt(DifficultyHitObject current)
         {
             technicalProcessor.ProcessStrainFor(current);
 
-            return technicalProcessor.TransformStrainToAccuracyDifficulties(technicalProcessor.CurrentStrain);
+            return new NoteAccuracyCurve { Difficulty = technicalProcessor.CurrentStrain, ScaleFactor = ACCURACY_SCALE_FACTOR };
         }
     }
 }

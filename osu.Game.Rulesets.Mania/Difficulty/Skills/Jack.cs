@@ -10,19 +10,21 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
 {
     public class Jack : ManiaSkill
     {
+        public const double ACCURACY_SCALE_FACTOR = 3.3;
+
         private readonly IDifficultyProcessor jackProcessor;
 
-        public Jack(Mod[] mods, IDifficultyProcessor jackProcessor)
-            : base(mods)
+        public Jack(Mod[] mods, IDifficultyProcessor jackProcessor, double overallDifficulty)
+            : base(mods, overallDifficulty, ACCURACY_SCALE_FACTOR, ACCURACY_SCALE_FACTOR)
         {
             this.jackProcessor = jackProcessor;
         }
 
-        protected override AccuracyDifficulties AccuracyDifficultiesAt(DifficultyHitObject current)
+        protected override NoteAccuracyCurve AccuracyCurveAt(DifficultyHitObject current)
         {
             jackProcessor.ProcessStrainFor(current);
 
-            return jackProcessor.TransformStrainToAccuracyDifficulties(jackProcessor.CurrentStrain);
+            return new NoteAccuracyCurve { Difficulty = jackProcessor.CurrentStrain, ScaleFactor = ACCURACY_SCALE_FACTOR };
         }
     }
 }

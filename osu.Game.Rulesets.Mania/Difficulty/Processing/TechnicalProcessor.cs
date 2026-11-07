@@ -12,17 +12,6 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Processing
 {
     public class TechnicalProcessor : IDifficultyProcessor
     {
-        private static readonly AccuracyValueMultipliers multipliers = new AccuracyValueMultipliers
-        (
-            multiplierAt995: 0.945,
-            multiplierAt99: 0.85,
-            multiplierAt98: 0.75,
-            multiplierAt95: 0.60,
-            multiplierAt90: 0.48,
-            multiplierAt85: 0.38,
-            multiplierAt80: 0.17
-        );
-
         public double CurrentStrain { get; private set; }
 
         private const double strain_decay_base = 0.06696;
@@ -116,7 +105,5 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Processing
 
             return distinct;
         }
-
-        public AccuracyDifficulties TransformStrainToAccuracyDifficulties(double strain) => new AccuracyDifficulties(strain, multipliers);
     }
 }

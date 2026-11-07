@@ -19,7 +19,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
         /// <param name="accuracy">The desired precision in which the root is returned.</param>
         public static double FindRootExpand(Func<double, double> function, double guessLowerBound, double guessUpperBound, int maxIterations = 25, double accuracy = 1e-6D)
         {
-            const int max_expansions = 32;
+            const int max_expansions = 128;
 
             double a = guessLowerBound;
             double b = guessUpperBound;
@@ -31,8 +31,8 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Utils
             while (fa * fb > 0)
             {
                 a = b;
-                b *= 2;
-                fa = function(a);
+                b *= 4;
+                fa = fb;
                 fb = function(b);
 
                 if (++expansions > max_expansions)

@@ -26,7 +26,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty
 {
     public class ManiaDifficultyCalculator : DifficultyCalculator
     {
-        private const double overall_multiplier = 0.360643;
+        private const double overall_multiplier = 0.34;
         public const double STAR_RATING_EXPONENT = 0.52899;
 
         /*private const double strain_length_base_nerf = 0.195;
@@ -66,7 +66,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty
             hitWindows.SetDifficulty(beatmap.Difficulty.OverallDifficulty);
 
             double greatHitWindow = hitWindows.WindowFor(HitResult.Great) / hitWindowDifficultyMultiplier(beatmap);
-            double odMult = hitWindowMultiplier(greatHitWindow);
+            double odMult = 1; // hitWindowMultiplier(greatHitWindow);
 
             int totalNotes = beatmap.HitObjects.Count;
             int holdNotes = beatmap.HitObjects.Count(h => h is HoldNote);
@@ -88,16 +88,16 @@ namespace osu.Game.Rulesets.Mania.Difficulty
             double ssSkill = totalSkill.DifficultyValueAtAccuracy(1.0);
             double starRatingSS = scaleToStarRating(ssSkill * consistencyMult) * odMult * lengthBonus;
 
-            var scoreLossCoefficients = totalSkill.GetScoreLossCoefficients(ssSkill);
+            var accPenalties = totalSkill.GetAccuracyPenalties(ssSkill);
+            (long p1, long p2, long p3) = accPenalties.Pack();
 
             return new ManiaDifficultyAttributes
             {
                 StarRating = starRating,
                 StarRatingSS = starRatingSS,
-                ScoreLossCoefficientA = scoreLossCoefficients.A,
-                ScoreLossCoefficientB = scoreLossCoefficients.B,
-                ScoreLossCoefficientC = scoreLossCoefficients.C,
-                ScoreLossCoefficientD = scoreLossCoefficients.D,
+                P1 = p1,
+                P2 = p2,
+                P3 = p3,
                 Mods = mods,
                 MaxCombo = beatmap.HitObjects.Sum(maxComboForObject),
                 SpeedDifficulty = speedStarRating,
@@ -230,12 +230,12 @@ namespace osu.Game.Rulesets.Mania.Difficulty
             // Total has to come last so that every other skill has processed the current note before it reads them.
             return new Skill[]
             {
-                new Speed(mods, speedProcessor),
-                new Technical(mods, technicalProcessor),
-                new Jack(mods, jackProcessor),
-                new Coordination(mods, coordinationProcessor),
-                new Release(mods, releaseProcessor),
-                new Total(mods, coordinationProcessor, jackProcessor, releaseProcessor, speedProcessor, technicalProcessor),
+                new Speed(mods, speedProcessor, beatmap.Difficulty.OverallDifficulty),
+                new Technical(mods, technicalProcessor, beatmap.Difficulty.OverallDifficulty),
+                new Jack(mods, jackProcessor, beatmap.Difficulty.OverallDifficulty),
+                new Coordination(mods, coordinationProcessor, beatmap.Difficulty.OverallDifficulty),
+                new Release(mods, releaseProcessor, beatmap.Difficulty.OverallDifficulty),
+                new Total(mods, coordinationProcessor, jackProcessor, releaseProcessor, speedProcessor, technicalProcessor, beatmap.Difficulty.OverallDifficulty),
             };
         }
 

@@ -13,17 +13,9 @@ namespace osu.Game.Rulesets.Mania.Difficulty
         [JsonProperty("ss_star_rating")]
         public double StarRatingSS { get; set; }
 
-        [JsonProperty("score_loss_coefficient_a")]
-        public double ScoreLossCoefficientA { get; set; }
-
-        [JsonProperty("score_loss_coefficient_b")]
-        public double ScoreLossCoefficientB { get; set; }
-
-        [JsonProperty("score_loss_coefficient_c")]
-        public double ScoreLossCoefficientC { get; set; }
-
-        [JsonProperty("score_loss_coefficient_d")]
-        public double ScoreLossCoefficientD { get; set; }
+        public long P1 { get; set; }
+        public long P2 { get; set; }
+        public long P3 { get; set; }
 
         [JsonProperty("speed_difficulty")]
         public double SpeedDifficulty { get; set; }

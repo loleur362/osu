@@ -10,19 +10,21 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
 {
     public class Coordination : ManiaSkill
     {
+        public const double ACCURACY_SCALE_FACTOR = 2.2;
+
         private readonly IDifficultyProcessor coordinationProcessor;
 
-        public Coordination(Mod[] mods, IDifficultyProcessor coordinationProcessor)
-            : base(mods)
+        public Coordination(Mod[] mods, IDifficultyProcessor coordinationProcessor, double overallDifficulty)
+            : base(mods, overallDifficulty, ACCURACY_SCALE_FACTOR, ACCURACY_SCALE_FACTOR)
         {
             this.coordinationProcessor = coordinationProcessor;
         }
 
-        protected override AccuracyDifficulties AccuracyDifficultiesAt(DifficultyHitObject current)
+        protected override NoteAccuracyCurve AccuracyCurveAt(DifficultyHitObject current)
         {
             coordinationProcessor.ProcessStrainFor(current);
 
-            return coordinationProcessor.TransformStrainToAccuracyDifficulties(coordinationProcessor.CurrentStrain);
+            return new NoteAccuracyCurve { Difficulty = coordinationProcessor.CurrentStrain, ScaleFactor = ACCURACY_SCALE_FACTOR };
         }
     }
 }
